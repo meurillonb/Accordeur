@@ -444,10 +444,19 @@ async function initPWA() {
       const registration = await navigator.serviceWorker.register('sw.js', { scope: '/' });
       console.log('[SW] Registration successful:', registration);
 
-      // Check for updates
+      // Check for updates every 30 seconds (more responsive)
       setInterval(() => {
+        console.log('[SW] Checking for updates...');
         registration.update();
-      }, 60000); // Check every minute
+      }, 30000); // Check every 30 seconds instead of 60
+
+      // Also check on visibility change (when user returns to app)
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          console.log('[SW] Page visible again, checking for updates');
+          registration.update();
+        }
+      });
 
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
@@ -456,6 +465,7 @@ async function initPWA() {
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
             // New SW ready
+            console.log('[SW] New SW ready, showing update notification');
             showUpdateNotification(registration);
           }
         });
@@ -708,26 +718,44 @@ function showUpdateNotification(registration) {
     color: #fff;
     text-align: center;
     box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+    animation: slideDown 0.3s ease;
   `;
 
   updateDiv.innerHTML = `
     <div style="font-weight: 700; margin-bottom: 8px;">✨ Nouvelle version disponible</div>
-    <button id="update-btn" style="
-      padding: 8px 16px;
-      border: none;
-      background: #fff;
-      color: #22c55e;
-      border-radius: 6px;
-      font-weight: 600;
-      cursor: pointer;
-      font-size: 12px;
-      margin-top: 8px;
-    ">Mettre à jour</button>
+    <div style="font-size: 12px; margin-bottom: 12px; opacity: 0.9;">
+      GuitarTune a été mise à jour
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button id="update-btn" style="
+        flex: 1;
+        padding: 10px 16px;
+        border: none;
+        background: #fff;
+        color: #22c55e;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 12px;
+      ">Mettre à jour</button>
+      <button id="update-later" style="
+        flex: 1;
+        padding: 10px 16px;
+        border: 1px solid rgba(255,255,255,0.3);
+        background: rgba(255,255,255,0.1);
+        color: #fff;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 12px;
+      ">Plus tard</button>
+    </div>
   `;
 
   document.body.appendChild(updateDiv);
 
   document.getElementById('update-btn').addEventListener('click', () => {
+    console.log('[SW] User accepted update');
     // Tell the service worker to update
     if (navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
@@ -735,10 +763,33 @@ function showUpdateNotification(registration) {
     swRefresh = registration.installing;
     swRefresh.addEventListener('statechange', () => {
       if (swRefresh.state === 'activated') {
+        console.log('[SW] New SW activated, reloading page');
         window.location.reload();
       }
     });
   });
+
+  document.getElementById('update-later').addEventListener('click', () => {
+    console.log('[SW] User dismissed update notification');
+    updateDiv.remove();
+    // Ask again in 5 minutes
+    setTimeout(() => {
+      if (updateDiv.parentElement) {
+        showUpdateNotification(registration);
+      }
+    }, 300000); // 5 minutes
+  });
+
+  // Auto-ask again in 10 minutes if user doesn't interact
+  const timeoutId = setTimeout(() => {
+    if (updateDiv.parentElement) {
+      updateDiv.remove();
+      showUpdateNotification(registration);
+    }
+  }, 600000); // 10 minutes
+
+  // Clear timeout if user interacts
+  updateDiv.addEventListener('click', () => clearTimeout(timeoutId));
 }
 
 function showNotification(title, message) {
