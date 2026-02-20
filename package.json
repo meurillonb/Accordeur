@@ -1,0 +1,28 @@
+{
+  "name": "guitartune",
+  "version": "2.0.0",
+  "description": "Accordeur guitare professionnel PWA avec détection d'accord IA",
+  "main": "index.html",
+  "scripts": {
+    "start": "http-server -p 8000 -c-1 --cors",
+    "dev": "http-server -p 8000 -o"
+  },
+  "keywords": [
+    "guitare",
+    "accordeur",
+    "tuner",
+    "musique",
+    "pwa",
+    "offline",
+    "web-app"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/meurillonb/Accordeur"
+  }
+}

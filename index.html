@@ -1,691 +1,108 @@
 <!DOCTYPE html>
 
 <html lang="fr">
+
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0" />
   <meta name="theme-color" content="#0a0a0f" />
-  <meta name="description" content="Accordeur guitare - Guitar Tuner PWA" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="description" content="GuitarTune - Accordeur guitare chromatique avec détection d'accord AI. Fonctionne hors ligne." />
+  <meta name="keywords" content="accordeur, guitare, tuner, musique, offline, pwa" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="GuitarTune" />
+  <meta name="application-name" content="GuitarTune" />
+  <meta name="msapplication-TileColor" content="#0a0a0f" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23060609' width='192' height='192'/><circle cx='96' cy='96' r='70' fill='%23f5a623'/></svg>" />
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%23060609' width='180' height='180' rx='40'/><g fill='%23f5a623'><circle cx='90' cy='50' r='15'/><rect x='82' y='65' width='16' height='50' rx='8'/><circle cx='60' cy='100' r='10'/><circle cx='120' cy='100' r='10'/></g></svg>" />
   <link rel="manifest" href="manifest.json" />
   <title>GuitarTune — Accordeur</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Playfair+Display:ital,wght@1,400;1,700&display=swap" rel="stylesheet" />
-  <style>
-    :root {
-      --bg: #060609;
-      --bg2: #0e0e16;
-      --bg3: #14141f;
-      --border: rgba(255,255,255,0.07);
-      --border-bright: rgba(255,255,255,0.15);
-      --amber: #f5a623;
-      --amber-dim: #a36a10;
-      --amber-glow: rgba(245, 166, 35, 0.25);
-      --green: #22c55e;
-      --green-glow: rgba(34, 197, 94, 0.3);
-      --red: #ef4444;
-      --red-glow: rgba(239, 68, 68, 0.3);
-      --text: #e8e8f0;
-      --text-dim: #6b6b80;
-      --text-muted: #3a3a50;
-    }
-
-```
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-/* Lock viewport — zero scroll */
-html {
-  height: 100%;
-  height: 100dvh;
-  overflow: hidden;
-}
-
-body {
-  height: 100%;
-  height: 100dvh;
-  overflow: hidden;
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'DM Mono', monospace;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  /* Notched phone safe areas */
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
-}
-
-/* Grain texture */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-  pointer-events: none;
-  z-index: 1000;
-  opacity: 0.6;
-}
-
-/* ROOT: full height column, no overflow */
-#root {
-  width: 100%;
-  max-width: 520px;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  padding: clamp(6px, 1.5dvh, 18px) clamp(12px, 3vw, 20px);
-  gap: clamp(4px, 1dvh, 12px);
-  overflow: hidden;
-}
-
-/* ── HEADER ── */
-header {
-  text-align: center;
-  flex-shrink: 0;
-  animation: fadeUp 0.5s ease 0s both;
-}
-
-header .logo {
-  font-family: 'Syncopate', sans-serif;
-  font-size: clamp(7px, 1.1dvh, 10px);
-  letter-spacing: 0.4em;
-  color: var(--amber);
-  text-transform: uppercase;
-  opacity: 0.8;
-}
-
-header h1 {
-  font-family: 'Playfair Display', serif;
-  font-style: italic;
-  font-size: clamp(20px, 4.5dvh, 36px);
-  font-weight: 700;
-  background: linear-gradient(135deg, #fff 0%, #c0b090 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  line-height: 1.1;
-}
-
-/* ── MAIN DISPLAY ── */
-.main-display {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: clamp(10px, 2dvh, 18px);
-  padding: clamp(8px, 1.8dvh, 22px) clamp(10px, 3vw, 22px);
-  flex-shrink: 0;
-  position: relative;
-  overflow: hidden;
-  animation: fadeUp 0.5s ease 0.1s both;
-}
-
-.main-display::before {
-  content: '';
-  position: absolute; top: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, var(--border-bright), transparent);
-}
-
-.note-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: clamp(10px, 3vw, 24px);
-  margin-bottom: clamp(6px, 1.2dvh, 18px);
-}
-
-.note-label { text-align: center; }
-
-.note-label .lang {
-  font-size: clamp(6px, 0.9dvh, 9px);
-  letter-spacing: 0.3em;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  margin-bottom: 2px;
-}
-
-.note-label .note-name {
-  font-family: 'Syncopate', sans-serif;
-  font-size: clamp(28px, 7dvh, 52px);
-  font-weight: 700;
-  line-height: 1;
-  transition: all 0.15s ease;
-}
-
-.note-label .note-name.active-in-tune { color: var(--green); text-shadow: 0 0 30px var(--green-glow), 0 0 60px var(--green-glow); }
-.note-label .note-name.active-sharp   { color: var(--amber); text-shadow: 0 0 30px var(--amber-glow); }
-.note-label .note-name.active-flat    { color: var(--red);   text-shadow: 0 0 30px var(--red-glow); }
-.note-label .note-name.idle           { color: var(--text-muted); }
-
-.divider { width: 1px; height: clamp(36px, 5.5dvh, 56px); background: var(--border); }
-
-.freq-display { text-align: center; }
-
-.freq-display .freq-value {
-  font-family: 'DM Mono', monospace;
-  font-size: clamp(14px, 3dvh, 26px);
-  font-weight: 500;
-  color: var(--text);
-  letter-spacing: -0.02em;
-}
-
-.freq-display .freq-unit {
-  font-size: clamp(7px, 1dvh, 10px);
-  color: var(--text-dim);
-  letter-spacing: 0.2em;
-}
-
-/* GAUGE */
-.gauge-wrap { margin-bottom: clamp(4px, 0.8dvh, 14px); }
-
-.gauge-label-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: clamp(6px, 0.9dvh, 9px);
-  color: var(--text-muted);
-  letter-spacing: 0.12em;
-  margin-bottom: 5px;
-}
-
-.gauge { position: relative; height: 5px; background: var(--bg3); border-radius: 3px; overflow: visible; }
-
-.gauge-track {
-  position: absolute; inset: 0; border-radius: 3px;
-  background: linear-gradient(90deg, var(--red) 0%, var(--amber) 35%, var(--green) 50%, var(--amber) 65%, var(--red) 100%);
-  opacity: 0.2;
-}
-
-.gauge-center {
-  position: absolute; left: 50%; top: -3px; bottom: -3px;
-  width: 1px; background: var(--border-bright); transform: translateX(-50%);
-}
-
-.gauge-needle {
-  position: absolute; top: -7px; width: 3px; height: 19px;
-  border-radius: 2px; transform: translateX(-50%);
-  transition: left 0.1s ease, background-color 0.2s ease;
-}
-
-/* STATUS */
-.status-row { display: flex; align-items: center; gap: 8px; min-height: 18px; }
-
-.status-dot { width: 6px; height: 6px; border-radius: 50%; transition: all 0.2s; flex-shrink: 0; }
-.status-dot.listening { background: var(--amber); box-shadow: 0 0 8px var(--amber-glow); animation: pulse 1.5s infinite; }
-.status-dot.in-tune   { background: var(--green); box-shadow: 0 0 10px var(--green-glow); }
-.status-dot.off       { background: var(--text-muted); }
-
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-
-.status-text { font-size: clamp(7px, 1dvh, 10px); letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-dim); }
-.cents-display { font-size: clamp(7px, 1dvh, 10px); color: var(--text-dim); margin-left: auto; }
-
-/* ── STRINGS ── */
-.strings-section { flex-shrink: 0; animation: fadeUp 0.5s ease 0.2s both; }
-
-.strings-label {
-  font-size: clamp(6px, 0.9dvh, 9px);
-  letter-spacing: 0.3em;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  margin-bottom: clamp(4px, 0.8dvh, 8px);
-  text-align: center;
-}
-
-.strings-grid {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: clamp(3px, 0.8vw, 7px);
-}
-
-.string-btn {
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: clamp(6px, 1.2dvh, 10px);
-  padding: clamp(5px, 1dvh, 10px) 3px;
-  cursor: pointer;
-  text-align: center;
-  transition: all 0.2s;
-  position: relative;
-  overflow: hidden;
-}
-
-.string-btn::before {
-  content: '';
-  position: absolute; top: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, var(--border-bright), transparent);
-}
-
-.string-btn:hover { border-color: var(--amber-dim); background: rgba(245,166,35,0.05); }
-.string-btn.active { border-color: var(--amber); background: rgba(245,166,35,0.1); box-shadow: 0 0 14px var(--amber-glow); }
-
-.string-btn .s-num     { font-size: clamp(5px, 0.7dvh, 7px); color: var(--text-muted); margin-bottom: 1px; }
-.string-btn .s-note-us { font-family: 'Syncopate', sans-serif; font-size: clamp(10px, 1.8dvh, 15px); font-weight: 700; color: var(--text); line-height: 1; }
-.string-btn .s-note-fr { font-size: clamp(7px, 0.9dvh, 9px); color: var(--text-dim); margin-top: 1px; }
-.string-btn .s-freq    { font-size: clamp(5px, 0.7dvh, 7px); color: var(--text-muted); margin-top: 2px; }
-
-/* ── MIC + WAVEFORM ── */
-.mic-wave-row {
-  display: flex;
-  align-items: center;
-  gap: clamp(8px, 2vw, 14px);
-  flex-shrink: 0;
-  animation: fadeUp 0.5s ease 0.3s both;
-}
-
-.mic-section { flex-shrink: 0; text-align: center; }
-
-.mic-btn {
-  width: clamp(44px, 8dvh, 66px);
-  height: clamp(44px, 8dvh, 66px);
-  border-radius: 50%;
-  border: 2px solid var(--border);
-  background: var(--bg3);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: clamp(16px, 3.5dvh, 24px);
-  transition: all 0.25s ease;
-  position: relative;
-}
-
-.mic-btn::before {
-  content: '';
-  position: absolute; inset: -4px;
-  border-radius: 50%; border: 1px solid var(--border);
-  transition: all 0.25s;
-}
-
-.mic-btn.active {
-  border-color: var(--amber);
-  background: rgba(245,166,35,0.1);
-  box-shadow: 0 0 24px var(--amber-glow);
-}
-
-.mic-btn.active::before { border-color: var(--amber); animation: ripple 2s infinite; opacity: 0.4; }
-
-@keyframes ripple { 0%{inset:-4px;opacity:0.4} 100%{inset:-16px;opacity:0} }
-
-.mic-btn:hover:not(.active) { border-color: var(--border-bright); background: var(--bg2); }
-
-.mic-label {
-  font-size: clamp(6px, 0.8dvh, 8px);
-  letter-spacing: 0.25em;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  margin-top: 4px;
-}
-
-.waveform-wrap {
-  flex: 1;
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: clamp(6px, 1.2dvh, 10px);
-  padding: 6px;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  min-height: clamp(40px, 7dvh, 60px);
-}
-
-#waveform { width: 100%; height: 100%; display: block; }
-
-/* ── CHROMATIC ── */
-.chromatic-section {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: clamp(8px, 1.5dvh, 14px);
-  padding: clamp(6px, 1.2dvh, 14px) clamp(6px, 2vw, 14px);
-  flex-shrink: 0;
-  animation: fadeUp 0.5s ease 0.4s both;
-}
-
-.chromatic-label {
-  font-size: clamp(6px, 0.9dvh, 9px);
-  letter-spacing: 0.3em;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  margin-bottom: clamp(4px, 0.8dvh, 8px);
-  text-align: center;
-}
-
-.chromatic-grid {
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap: clamp(2px, 0.4vw, 4px);
-}
-
-.chroma-note {
-  text-align: center;
-  padding: clamp(3px, 0.6dvh, 7px) 1px;
-  border-radius: 4px;
-  border: 1px solid transparent;
-  transition: all 0.1s;
-}
-
-.chroma-note .cn-us {
-  font-family: 'Syncopate', sans-serif;
-  font-size: clamp(6px, 1.1dvh, 9px);
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-.chroma-note .cn-fr {
-  font-size: clamp(5px, 0.8dvh, 7px);
-  color: var(--text-muted);
-  opacity: 0.6;
-  margin-top: 1px;
-}
-
-.chroma-note.active { background: rgba(245,166,35,0.15); border-color: var(--amber-dim); }
-.chroma-note.active .cn-us { color: var(--amber); text-shadow: 0 0 10px var(--amber-glow); }
-
-/* ── FOOTER ── */
-footer {
-  text-align: center;
-  font-size: clamp(5px, 0.8dvh, 8px);
-  letter-spacing: 0.2em;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-@keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-```
-
-  </style>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Playfair+Display:ital,wght@1,400;1,700&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
-<div id="root">
+  <div id="root">
 
-  <header>
-    <div class="logo">Guitar Tune</div>
-  </header>
+    <header>
+      <div class="logo">Guitar Tune</div>
+    </header>
 
-  <div class="main-display">
-    <div class="note-container">
-      <div class="note-label">
-        <div class="lang">Français</div>
-        <div class="note-name idle" id="note-fr">—</div>
+    <div class="main-display">
+      <div class="note-container">
+        <div class="note-label">
+          <div class="lang">Français</div>
+          <div class="note-name idle" id="note-fr">—</div>
+        </div>
+        <div class="divider"></div>
+        <div class="freq-display">
+          <div class="freq-value" id="freq-val">— —</div>
+          <div class="freq-unit">Hz</div>
+        </div>
+        <div class="divider"></div>
+        <div class="note-label">
+          <div class="lang">English</div>
+          <div class="note-name idle" id="note-us">—</div>
+        </div>
       </div>
-      <div class="divider"></div>
-      <div class="freq-display">
-        <div class="freq-value" id="freq-val">— —</div>
-        <div class="freq-unit">Hz</div>
+
+      ```
+      <div class="gauge-wrap">
+        <div class="gauge-label-row">
+          <span>♭ BÉMOL</span>
+          <span>JUSTE</span>
+          <span>♯ DIÈSE</span>
+        </div>
+        <div class="gauge">
+          <div class="gauge-track"></div>
+          <div class="gauge-center"></div>
+          <div class="gauge-needle" id="needle" style="left:50%;background:var(--text-muted);"></div>
+        </div>
       </div>
-      <div class="divider"></div>
-      <div class="note-label">
-        <div class="lang">English</div>
-        <div class="note-name idle" id="note-us">—</div>
+
+      <div class="status-row">
+        <div class="status-dot off" id="status-dot"></div>
+        <span class="status-text" id="status-text">Inactif</span>
+        <span class="cents-display" id="cents-display"></span>
+      </div>
+      ```
+
+    </div>
+
+    <div class="strings-section">
+      <div class="strings-label">Cordes Standard — E A D G B e</div>
+      <div class="strings-grid" id="strings-grid"></div>
+    </div>
+
+    <div class="mic-wave-row">
+      <div class="mic-section">
+        <button class="mic-btn" id="mic-btn" title="Activer le microphone">🎙</button>
+        <div class="mic-label" id="mic-label">Écouter</div>
+      </div>
+      <div class="waveform-wrap">
+        <canvas id="waveform"></canvas>
       </div>
     </div>
 
-```
-<div class="gauge-wrap">
-  <div class="gauge-label-row">
-    <span>♭ BÉMOL</span>
-    <span>JUSTE</span>
-    <span>♯ DIÈSE</span>
-  </div>
-  <div class="gauge">
-    <div class="gauge-track"></div>
-    <div class="gauge-center"></div>
-    <div class="gauge-needle" id="needle" style="left:50%;background:var(--text-muted);"></div>
-  </div>
-</div>
-
-<div class="status-row">
-  <div class="status-dot off" id="status-dot"></div>
-  <span class="status-text" id="status-text">Inactif</span>
-  <span class="cents-display" id="cents-display"></span>
-</div>
-```
-
-  </div>
-
-  <div class="strings-section">
-    <div class="strings-label">Cordes Standard — E A D G B e</div>
-    <div class="strings-grid" id="strings-grid"></div>
-  </div>
-
-  <div class="mic-wave-row">
-    <div class="mic-section">
-      <button class="mic-btn" id="mic-btn" title="Activer le microphone">🎙</button>
-      <div class="mic-label" id="mic-label">Écouter</div>
+    <div class="chromatic-section">
+      <div class="chromatic-label">Gamme Chromatique</div>
+      <div class="chromatic-grid" id="chromatic-grid"></div>
     </div>
-    <div class="waveform-wrap">
-      <canvas id="waveform"></canvas>
-    </div>
+
+    <footer>
+      <span class="online-indicator" id="online-indicator"></span>
+      <span id="footer-text">GuitarTune PWA · A440 · Equal Temperament</span>
+    </footer>
+
   </div>
 
-  <div class="chromatic-section">
-    <div class="chromatic-label">Gamme Chromatique</div>
-    <div class="chromatic-grid" id="chromatic-grid"></div>
-  </div>
-
-  <footer>GuitarTune PWA · A440 · Equal Temperament</footer>
-
-</div>
-
-<script>
-const NOTE_NAMES_US = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-const NOTE_NAMES_FR = ['Do','Do#','Ré','Ré#','Mi','Fa','Fa#','Sol','Sol#','La','La#','Si'];
-
-const GUITAR_STRINGS = [
-  { string: 1, us: 'E', fr: 'Mi',  freq: 82.41 },
-  { string: 2, us: 'A', fr: 'La',  freq: 110.00 },
-  { string: 3, us: 'D', fr: 'Ré',  freq: 146.83 },
-  { string: 4, us: 'G', fr: 'Sol', freq: 196.00 },
-  { string: 5, us: 'B', fr: 'Si',  freq: 246.94 },
-  { string: 6, us: 'e', fr: 'Mi',  freq: 329.63 },
-];
-
-let audioCtx = null, analyser = null, source = null, stream = null;
-let isListening = false, animFrameId = null;
-
-// Pitch detection
-function freqToNote(freq) {
-  if (!freq || freq < 20) return null;
-  const noteNum = 12 * (Math.log2(freq / 440)) + 69;
-  const noteInt = Math.round(noteNum);
-  const cents = Math.round((noteNum - noteInt) * 100);
-  const noteIdx = ((noteInt % 12) + 12) % 12;
-  return { noteIdx, cents, us: NOTE_NAMES_US[noteIdx], fr: NOTE_NAMES_FR[noteIdx], freq: freq.toFixed(1) };
-}
-
-function autoCorrelate(buf, sr) {
-  const SIZE = buf.length, MAX = Math.floor(SIZE / 2);
-  let rms = 0;
-  for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
-  rms = Math.sqrt(rms / SIZE);
-  if (rms < 0.01) return -1;
-
-  let best = -1, bestC = 0, lastC = 1, found = false;
-  for (let o = 8; o < MAX; o++) {
-    let c = 0;
-    for (let i = 0; i < MAX; i++) c += Math.abs(buf[i] - buf[i + o]);
-    c = 1 - c / MAX;
-    if (c > 0.9 && c > lastC) { found = true; if (c > bestC) { bestC = c; best = o; } }
-    else if (found) return sr / best;
-    lastC = c;
-  }
-  return best !== -1 ? sr / best : -1;
-}
-
-// DOM refs
-const noteFrEl    = document.getElementById('note-fr');
-const noteUsEl    = document.getElementById('note-us');
-const freqValEl   = document.getElementById('freq-val');
-const needleEl    = document.getElementById('needle');
-const statusDotEl = document.getElementById('status-dot');
-const statusTextEl= document.getElementById('status-text');
-const centsEl     = document.getElementById('cents-display');
-const micBtn      = document.getElementById('mic-btn');
-const micLabel    = document.getElementById('mic-label');
-const waveCanvas  = document.getElementById('waveform');
-const waveCtx     = waveCanvas.getContext('2d');
-
-// Build strings
-const stringsGrid = document.getElementById('strings-grid');
-GUITAR_STRINGS.forEach(s => {
-  const btn = document.createElement('div');
-  btn.className = 'string-btn';
-  btn.innerHTML = `<div class="s-num">${s.string}</div><div class="s-note-us">${s.us}</div><div class="s-note-fr">${s.fr}</div><div class="s-freq">${s.freq}Hz</div>`;
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.string-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-  });
-  stringsGrid.appendChild(btn);
-});
-
-// Build chromatic
-const chromGrid = document.getElementById('chromatic-grid');
-NOTE_NAMES_US.forEach((n, i) => {
-  const div = document.createElement('div');
-  div.className = 'chroma-note'; div.id = `chroma-${i}`;
-  div.innerHTML = `<div class="cn-us">${n}</div><div class="cn-fr">${NOTE_NAMES_FR[i]}</div>`;
-  chromGrid.appendChild(div);
-});
-
-// Update UI
-function updateUI(note) {
-  if (!note) {
-    noteFrEl.textContent = '—'; noteUsEl.textContent = '—';
-    noteFrEl.className = 'note-name idle'; noteUsEl.className = 'note-name idle';
-    freqValEl.textContent = '— —';
-    needleEl.style.left = '50%'; needleEl.style.background = 'var(--text-muted)'; needleEl.style.boxShadow = 'none';
-    centsEl.textContent = '';
-    document.querySelectorAll('.chroma-note').forEach(el => el.classList.remove('active'));
-    return;
-  }
-  noteFrEl.textContent = note.fr; noteUsEl.textContent = note.us;
-  freqValEl.textContent = note.freq;
-
-  const pct = Math.max(2, Math.min(98, 50 + (note.cents / 100) * 50));
-  needleEl.style.left = pct + '%';
-
-  const abs = Math.abs(note.cents);
-  let cls, color;
-
-  if (abs <= 5) {
-    cls = 'active-in-tune'; color = 'var(--green)';
-    statusTextEl.textContent = 'En Accord ✓'; statusDotEl.className = 'status-dot in-tune';
-    centsEl.textContent = '±' + abs + '¢';
-  } else if (abs <= 20) {
-    cls = 'active-sharp'; color = 'var(--amber)';
-    statusTextEl.textContent = note.cents > 0 ? '♯ Trop haut' : '♭ Trop bas';
-    statusDotEl.className = 'status-dot listening';
-    centsEl.textContent = (note.cents > 0 ? '+' : '') + note.cents + '¢';
-  } else {
-    cls = 'active-flat'; color = 'var(--red)';
-    statusTextEl.textContent = note.cents > 0 ? '♯ Dièse' : '♭ Bémol';
-    statusDotEl.className = 'status-dot listening';
-    centsEl.textContent = (note.cents > 0 ? '+' : '') + note.cents + '¢';
-  }
-
-  noteFrEl.className = 'note-name ' + cls; noteUsEl.className = 'note-name ' + cls;
-  needleEl.style.background = color; needleEl.style.boxShadow = `0 0 8px ${color}`;
-
-  document.querySelectorAll('.chroma-note').forEach(el => el.classList.remove('active'));
-  const ac = document.getElementById(`chroma-${note.noteIdx}`);
-  if (ac) ac.classList.add('active');
-}
-
-// Canvas sizing
-function resizeCanvas() {
-  const dpr = window.devicePixelRatio || 1;
-  const rect = waveCanvas.parentElement.getBoundingClientRect();
-  waveCanvas.width  = rect.width  * dpr;
-  waveCanvas.height = rect.height * dpr;
-  waveCanvas.style.width  = rect.width  + 'px';
-  waveCanvas.style.height = rect.height + 'px';
-  waveCtx.scale(dpr, dpr);
-  return { w: rect.width, h: rect.height };
-}
-
-function drawIdle() {
-  const { w, h } = resizeCanvas();
-  waveCtx.fillStyle = '#14141f'; waveCtx.fillRect(0, 0, w, h);
-  waveCtx.strokeStyle = 'rgba(255,255,255,0.08)'; waveCtx.lineWidth = 1;
-  waveCtx.beginPath(); waveCtx.moveTo(0, h / 2); waveCtx.lineTo(w, h / 2); waveCtx.stroke();
-}
-
-function drawWaveform(data) {
-  const dpr = window.devicePixelRatio || 1;
-  const rect = waveCanvas.parentElement.getBoundingClientRect();
-  const W = rect.width, H = rect.height;
-  if (waveCanvas.width !== W * dpr) resizeCanvas();
-  waveCtx.fillStyle = '#14141f'; waveCtx.fillRect(0, 0, W, H);
-  waveCtx.lineWidth = 1.5; waveCtx.strokeStyle = 'rgba(245,166,35,0.7)';
-  waveCtx.beginPath();
-  const sl = W / data.length;
-  let x = 0;
-  for (let i = 0; i < data.length; i++) {
-    const y = (data[i] / 128.0) * H / 2;
-    i === 0 ? waveCtx.moveTo(x, y) : waveCtx.lineTo(x, y);
-    x += sl;
-  }
-  waveCtx.lineTo(W, H / 2); waveCtx.stroke();
-}
-
-// Audio loop
-function processAudio() {
-  if (!analyser) return;
-  const buf = new Float32Array(analyser.fftSize);
-  const timeBuf = new Uint8Array(analyser.fftSize);
-  analyser.getFloatTimeDomainData(buf);
-  analyser.getByteTimeDomainData(timeBuf);
-  drawWaveform(timeBuf);
-  const freq = autoCorrelate(buf, audioCtx.sampleRate);
-  if (freq > 40 && freq < 2000) {
-    updateUI(freqToNote(freq));
-  } else {
-    statusTextEl.textContent = 'En écoute...';
-    statusDotEl.className = 'status-dot listening';
-  }
-  animFrameId = requestAnimationFrame(processAudio);
-}
-
-// Mic
-async function startListening() {
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 2048; analyser.smoothingTimeConstant = 0.8;
-    source = audioCtx.createMediaStreamSource(stream);
-    source.connect(analyser);
-    isListening = true;
-    micBtn.classList.add('active'); micBtn.textContent = '🔴';
-    micLabel.textContent = 'Actif';
-    statusDotEl.className = 'status-dot listening';
-    statusTextEl.textContent = 'En écoute...';
-    processAudio();
-  } catch (e) { alert('Microphone inaccessible : ' + e.message); }
-}
-
-function stopListening() {
-  isListening = false;
-  if (animFrameId) cancelAnimationFrame(animFrameId);
-  if (source) source.disconnect();
-  if (stream) stream.getTracks().forEach(t => t.stop());
-  if (audioCtx) audioCtx.close();
-  audioCtx = null; analyser = null; source = null; stream = null;
-  micBtn.classList.remove('active'); micBtn.textContent = '🎙';
-  micLabel.textContent = 'Écouter';
-  statusDotEl.className = 'status-dot off';
-  statusTextEl.textContent = 'Inactif';
-  updateUI(null);
-  setTimeout(drawIdle, 50);
-}
-
-micBtn.addEventListener('click', () => { isListening ? stopListening() : startListening(); });
-
-window.addEventListener('load', drawIdle);
-window.addEventListener('resize', () => { if (!isListening) drawIdle(); });
-
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(console.warn);
-</script>
-
+  <script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia.js-core.js"></script>
+  <script src="app.js" defer></script>
 </body>
+
 </html>
