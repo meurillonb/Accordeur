@@ -81,14 +81,14 @@ function autoCorrelate(buf, sr) {
   let rms = 0;
   for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
   rms = Math.sqrt(rms / SIZE);
-  if (rms < 0.01) return -1;
+  if (rms < 0.008) return -1;
 
   let best = -1, bestC = 0, lastC = 1, found = false;
   for (let o = 8; o < MAX; o++) {
     let c = 0;
     for (let i = 0; i < MAX; i++) c += Math.abs(buf[i] - buf[i + o]);
     c = 1 - c / MAX;
-    if (c > 0.9 && c > lastC) { found = true; if (c > bestC) { bestC = c; best = o; } }
+    if (c > 0.88 && c > lastC) { found = true; if (c > bestC) { bestC = c; best = o; } }
     else if (found) return sr / best;
     lastC = c;
   }
@@ -363,7 +363,7 @@ async function startListening() {
       } : {
         echoCancellation: false,
         noiseSuppression: false,
-        autoGainControl: false
+        autoGainControl: true
       }
     };
 
