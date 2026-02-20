@@ -475,6 +475,7 @@ header h1 {
   align-items: center;
   gap: clamp(8px, 2vw, 14px);
   flex-shrink: 0;
+  max-height: clamp(60px, 10dvh, 100px);
   animation: fadeUp 0.5s ease 0.3s both;
 }
 
@@ -545,7 +546,7 @@ header h1 {
 }
 
 .waveform-wrap {
-  flex: 1;
+  flex: 1 1 auto;
   background: var(--bg3);
   border: 1px solid var(--border);
   border-radius: clamp(6px, 1.2dvh, 10px);
@@ -553,7 +554,10 @@ header h1 {
   overflow: hidden;
   display: flex;
   align-items: center;
-  min-height: clamp(40px, 7dvh, 60px);
+  justify-content: center;
+  min-height: clamp(50px, 8dvh, 70px);
+  max-height: clamp(50px, 8dvh, 70px);
+  height: clamp(50px, 8dvh, 70px);
 }
 
 #waveform {
