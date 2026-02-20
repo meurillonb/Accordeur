@@ -81,14 +81,14 @@ function autoCorrelate(buf, sr) {
   let rms = 0;
   for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
   rms = Math.sqrt(rms / SIZE);
-  if (rms < 0.008) return -1;
+  if (rms < 0.01) return -1;
 
   let best = -1, bestC = 0, lastC = 1, found = false;
   for (let o = 8; o < MAX; o++) {
     let c = 0;
     for (let i = 0; i < MAX; i++) c += Math.abs(buf[i] - buf[i + o]);
     c = 1 - c / MAX;
-    if (c > 0.88 && c > lastC) { found = true; if (c > bestC) { bestC = c; best = o; } }
+    if (c > 0.9 && c > lastC) { found = true; if (c > bestC) { bestC = c; best = o; } }
     else if (found) return sr / best;
     lastC = c;
   }
@@ -359,11 +359,11 @@ async function startListening() {
       audio: isIOS ? {
         echoCancellation: true,
         noiseSuppression: true,
-        autoGainControl: true
+        autoGainControl: false
       } : {
         echoCancellation: false,
         noiseSuppression: false,
-        autoGainControl: true
+        autoGainControl: false
       }
     };
 
@@ -372,8 +372,27 @@ async function startListening() {
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.8;
+    
     source = audioCtx.createMediaStreamSource(stream);
-    source.connect(analyser);
+    
+    // Ajouter filtre passe-haut pour éliminer le bruit ambiant
+    const hpFilter = audioCtx.createBiquadFilter();
+    hpFilter.type = 'highpass';
+    hpFilter.frequency.value = 50; // 50Hz - élimine le rumble
+    hpFilter.Q.value = 1;
+    
+    // Compressor pour normaliser les niveaux
+    const compressor = audioCtx.createDynamicsCompressor();
+    compressor.threshold.value = -50;
+    compressor.knee.value = 40;
+    compressor.ratio.value = 12;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.25;
+    
+    // Chaîne: source -> HPF -> compressor -> analyser
+    source.connect(hpFilter);
+    hpFilter.connect(compressor);
+    compressor.connect(analyser);
     isListening = true;
     micBtn.classList.add('active');
     micBtn.textContent = '🔴';
