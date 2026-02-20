@@ -441,7 +441,7 @@ async function initPWA() {
   // Register service worker
   if ('serviceWorker' in navigator) {
     try {
-      const registration = await navigator.serviceWorker.register('sw.js', { scope: '/' });
+      const registration = await navigator.serviceWorker.register('sw.js', { scope: './' });
       console.log('[SW] Registration successful:', registration);
 
       // Check for updates every 30 seconds (more responsive)
@@ -815,24 +815,25 @@ window.addEventListener('load', () => {
 
   // ──────── PWA INSTALLATION ────────
   initPWA();
+
+  // Attach microphone button listener
+  micBtn.addEventListener('click', async (e) => { 
+    e.preventDefault();
+    e.stopPropagation();
+    if (isListening) {
+      stopListening();
+    } else {
+      try {
+        await startListening();
+      } catch (err) {
+        console.error('Error starting listening:', err);
+        showMicrophoneError(err);
+      }
+    }
+  });
 });
 
 window.addEventListener('resize', () => { if (!isListening) drawIdle(); });
-
-micBtn?.addEventListener('click', async (e) => { 
-  e.preventDefault();
-  e.stopPropagation();
-  if (isListening) {
-    stopListening();
-  } else {
-    try {
-      await startListening();
-    } catch (err) {
-      console.error('Error starting listening:', err);
-      showMicrophoneError(err);
-    }
-  }
-});
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.ready.then(() => {
   // Request notification permission
