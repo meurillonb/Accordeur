@@ -497,6 +497,10 @@ header h1 {
   font-size: clamp(16px, 3.5dvh, 24px);
   transition: all 0.25s ease;
   position: relative;
+  pointer-events: auto;
+  z-index: 10;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .mic-btn::before {
@@ -506,6 +510,7 @@ header h1 {
   border-radius: 50%;
   border: 1px solid var(--border);
   transition: all 0.25s;
+  pointer-events: none;
 }
 
 .mic-btn.active {

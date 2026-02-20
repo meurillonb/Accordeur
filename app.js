@@ -334,13 +334,21 @@ async function startListening() {
     // Initialise Essentia
     await initEssentia();
 
-    stream = await navigator.mediaDevices.getUserMedia({ 
-      audio: { 
-        echoCancellation: false, 
-        noiseSuppression: false, 
-        autoGainControl: false 
-      } 
-    });
+    // iOS nécessite des paramètres différents
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const audioConstraints = {
+      audio: isIOS ? {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      } : {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      }
+    };
+
+    stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 2048;
@@ -383,13 +391,40 @@ function stopListening() {
 
 // ──────── PWA MANAGEMENT ────────
 async function initPWA() {
-  // Handle install prompt
+  // Détecter la plateforme et navigateur
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua);
+  const isMac = /Macintosh|MacIntel|MacPPC|Mac68K/.test(ua);
+  const isAndroid = /Android/.test(ua);
+  const isWindows = /Windows|Win32|Win64|WinCE|Win95|Win98|Win16|WinNT/.test(ua);
+  
+  const isChrome = /Chrome/.test(ua) && !/Chromium|Edge|OPR/.test(ua);
+  const isEdge = /Edg/.test(ua);
+  const isFirefox = /Firefox/.test(ua);
+  const isSafari = /Safari/.test(ua) && !/Chrome|Chromium|Edge|OPR|Firefox/.test(ua);
+  
+  const supportsBeforeInstallPrompt = 'onbeforeinstallprompt' in window;
+  
+  console.log(`[PWA] Platform: ${isWindows ? 'Windows' : isAndroid ? 'Android' : isMac ? 'macOS' : isIOS ? 'iOS' : 'unknown'}`);
+  console.log(`[PWA] Browser: ${isChrome ? 'Chrome' : isEdge ? 'Edge' : isFirefox ? 'Firefox' : isSafari ? 'Safari' : 'unknown'}`);
+  console.log(`[PWA] beforeinstallprompt support: ${supportsBeforeInstallPrompt}`);
+
+  // Handle install prompt (Windows, Android, Linux - Chrome/Edge based browsers)
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
     console.log('[PWA] Install prompt available');
     showInstallPrompt();
   });
+  
+  // Afficher les guides spécifiques pour les navigateurs sans beforeinstallprompt
+  if ((isIOS || isMac) && isSafari && !supportsBeforeInstallPrompt) {
+    // iOS et macOS Safari n'ont pas beforeinstallprompt
+    showAppleInstallGuide(isIOS ? 'iOS' : 'macOS');
+  } else if (!supportsBeforeInstallPrompt && !isChrome && !isEdge && !isFirefox) {
+    // Autres navigateurs sans support
+    console.warn('[PWA] Installation not supported in this browser');
+  }
 
   // Handle app installed
   window.addEventListener('appinstalled', () => {
@@ -522,6 +557,142 @@ function showInstallPrompt() {
   });
 }
 
+function showAppleInstallGuide(platform) {
+  const guideDiv = document.createElement('div');
+  guideDiv.id = 'apple-install-guide';
+  guideDiv.style.cssText = `
+    position: fixed;
+    bottom: 24px;
+    left: 12px;
+    right: 12px;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    border-radius: 12px;
+    padding: 16px;
+    z-index: 999;
+    box-shadow: 0 8px 32px rgba(34, 197, 94, 0.4);
+    animation: slideUp 0.3s ease;
+    font-size: 14px;
+    color: #fff;
+  `;
+
+  let instructions = '';
+  if (platform === 'iOS') {
+    instructions = `
+      1. Tapez le bouton Partage (↗️)<br/>
+      2. Sélectionnez "Sur l'écran d'accueil"<br/>
+      3. Confirmez
+    `;
+  } else if (platform === 'macOS') {
+    instructions = `
+      1. Cliquez le menu "Partage" (↗️)<br/>
+      2. Sélectionnez "Ajouter à la base de lecture"<br/>
+      3. Confirmez
+    `;
+  }
+
+  guideDiv.innerHTML = `
+    <div style="font-weight: 700; margin-bottom: 12px;">🍎 Installer sur ${platform}</div>
+    <div style="font-size: 12px; margin-bottom: 12px; opacity: 0.95;">
+      ${instructions}
+    </div>
+    <button id="apple-close" style="
+      width: 100%;
+      padding: 10px 16px;
+      border: none;
+      background: rgba(255,255,255,0.2);
+      color: #fff;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 12px;
+    ">Compris</button>
+  `;
+
+  document.body.appendChild(guideDiv);
+
+  document.getElementById('apple-close').addEventListener('click', () => {
+    guideDiv.remove();
+  });
+  
+  // Auto-fermer après 8 secondes
+  setTimeout(() => {
+    if (guideDiv.parentElement) guideDiv.remove();
+  }, 8000);
+}
+
+function showMicrophoneError(error) {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  
+  let errorMessage = 'Erreur microphone : ' + error.name;
+  let solution = '';
+  
+  switch(error.name) {
+    case 'NotAllowedError':
+      errorMessage = 'Permission refusée';
+      solution = isIOS ? 
+        'Vérifiez: Réglages → GuitarTune → Microphone' :
+        'Autorisez l\'accès au microphone';
+      break;
+    case 'NotFoundError':
+      errorMessage = 'Microphone non détecté';
+      solution = 'Vérifiez que votre appareil a un microphone';
+      break;
+    case 'NotReadableError':
+      errorMessage = 'Microphone en utilisation';
+      solution = 'Fermez les autres apps utilisant le microphone';
+      break;
+    case 'PermissionDeniedError':
+      errorMessage = 'Permission de microphone refusée';
+      solution = isIOS ? 
+        'Allez dans Réglages → GuitarTune → Autorisez le microphone' :
+        'Autorisez l\'accès au microphone dans les paramètres';
+      break;
+  }
+
+  const errorDiv = document.createElement('div');
+  errorDiv.style.cssText = `
+    position: fixed;
+    bottom: 24px;
+    left: 12px;
+    right: 12px;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    border-radius: 12px;
+    padding: 16px;
+    z-index: 999;
+    box-shadow: 0 8px 32px rgba(239, 68, 68, 0.4);
+    animation: slideUp 0.3s ease;
+    font-size: 14px;
+    color: #fff;
+  `;
+
+  errorDiv.innerHTML = `
+    <div style="font-weight: 700; margin-bottom: 8px;">⚠️ ${errorMessage}</div>
+    <div style="font-size: 12px; margin-bottom: 12px; opacity: 0.95;">${solution}</div>
+    <button style="
+      width: 100%;
+      padding: 10px 16px;
+      border: none;
+      background: rgba(255,255,255,0.2);
+      color: #fff;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 12px;
+    ">Fermer</button>
+  `;
+
+  document.body.appendChild(errorDiv);
+  
+  errorDiv.querySelector('button').addEventListener('click', () => {
+    errorDiv.remove();
+  });
+  
+  // Auto-fermer après 6 secondes
+  setTimeout(() => {
+    if (errorDiv.parentElement) errorDiv.remove();
+  }, 6000);
+}
+
 function showUpdateNotification(registration) {
   const updateDiv = document.createElement('div');
   updateDiv.id = 'update-prompt';
@@ -597,7 +768,20 @@ window.addEventListener('load', () => {
 
 window.addEventListener('resize', () => { if (!isListening) drawIdle(); });
 
-micBtn?.addEventListener('click', () => { isListening ? stopListening() : startListening(); });
+micBtn?.addEventListener('click', async (e) => { 
+  e.preventDefault();
+  e.stopPropagation();
+  if (isListening) {
+    stopListening();
+  } else {
+    try {
+      await startListening();
+    } catch (err) {
+      console.error('Error starting listening:', err);
+      showMicrophoneError(err);
+    }
+  }
+});
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.ready.then(() => {
   // Request notification permission
