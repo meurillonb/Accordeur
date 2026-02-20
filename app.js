@@ -178,14 +178,13 @@ function createChordDisplay() {
 function buildStrings() {
   const stringsGrid = document.getElementById('strings-grid');
   GUITAR_STRINGS.forEach(s => {
-    const btn = document.createElement('div');
-    btn.className = 'string-btn';
-    btn.innerHTML = `<div class="s-num">${s.string}</div><div class="s-note-us">${s.us}</div><div class="s-note-fr">${s.fr}</div><div class="s-freq">${s.freq}Hz</div>`;
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.string-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-    });
-    stringsGrid.appendChild(btn);
+    const div = document.createElement('div');
+    div.className = 'string-status';
+    div.setAttribute('data-string', s.string);
+    div.setAttribute('data-note-us', s.us);
+    div.setAttribute('data-freq', s.freq);
+    div.innerHTML = `<div class="s-num">${s.string}</div><div class="s-note-us">${s.us}</div><div class="s-note-fr">${s.fr}</div><div class="s-freq">${s.freq}Hz</div><div class="s-status-icon">✓</div>`;
+    stringsGrid.appendChild(div);
   });
 }
 
@@ -209,6 +208,7 @@ function updateUI(note) {
     centsEl.textContent = '';
     chordDisplay.textContent = '';
     document.querySelectorAll('.chroma-note').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.string-status').forEach(el => el.classList.remove('active', 'in-tune', 'sharp', 'flat'));
     return;
   }
 
@@ -247,6 +247,25 @@ function updateUI(note) {
   document.querySelectorAll('.chroma-note').forEach(el => el.classList.remove('active'));
   const ac = document.getElementById(`chroma-${note.noteIdx}`);
   if (ac) ac.classList.add('active');
+
+  // Mettre à jour le statut des cordes
+  document.querySelectorAll('.string-status').forEach(stringEl => {
+    stringEl.classList.remove('active', 'in-tune', 'sharp', 'flat');
+    const stringNote = stringEl.getAttribute('data-note-us');
+    const stringFreq = parseFloat(stringEl.getAttribute('data-freq'));
+    
+    // Vérifie si la note détectée correspond à cette corde (même note, fréquence proche)
+    if (note.us === stringNote && Math.abs(parseFloat(note.freq) - stringFreq) < 30) {
+      stringEl.classList.add('active');
+      if (abs <= 5) {
+        stringEl.classList.add('in-tune');
+      } else if (abs <= 20) {
+        stringEl.classList.add('sharp');
+      } else {
+        stringEl.classList.add('flat');
+      }
+    }
+  });
 
   // Détection d'accord
   const chord = detectChord(detectedNotes);
