@@ -2,11 +2,11 @@
 /* GuitarTune PWA - Tailwind Complementary Styles */
 /* ═════════════════════════════════════════════════════════════ */
 
-/* Lock viewport — zero scroll */
+/* Lock viewport — MAIS scroll vertical autorisé sur mobile */
 html {
   height: 100%;
   height: 100dvh;
-  overflow: hidden;
+  /* Pas d'overflow hidden sur html pour mobile */
 }
 
 /* Base body adjustments for PWA */
@@ -16,15 +16,83 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
-  /* iOS scroll bounce disable */
+  /* iOS scroll bounce controlled mais scroll autorisé */
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
+  
+  /* Mobile: autoriser scroll vertical si contenu déborde */
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Mobile portrait: autorise scroll pour contenu long */
+@media (max-width: 768px) and (orientation: portrait) {
+  body {
+    overflow-y: auto; /* Scroll vertical autorisé */
+    overflow-x: hidden; /* Pas de scroll horizontal */
+    height: auto; /* Hauteur adaptative */
+    min-height: 100vh;
+  }
+  
+  #root {
+    min-height: 100vh;
+    height: auto; /* Permet extension si contenu plus grand */
+    overflow: visible;
+  }
 }
 
 /* Custom glass morphism effects */
 .glass-effect {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+}
+
+/* ────── iOS FIXES ────── */
+
+/* Force gauge visibility sur iOS */
+.gauge {
+  position: relative !important;
+  height: 10px !important; /* Plus visible que h-2 Tailwind */
+  background: rgba(6, 6, 9, 0.8) !important;
+  border-radius: 999px !important;
+  overflow: hidden !important;
+  display: block !important;
+  width: 100% !important;
+  min-height: 10px !important;
+  /* Fix iOS rendering */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+.gauge-needle {
+  position: absolute !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  -webkit-transform: translateY(-50%) !important;
+  width: 2px !important;
+  height: 14px !important;
+  border-radius: 999px !important;
+  transition: left 0.2s ease !important;
+  z-index: 10 !important;
+}
+
+.gauge-track {
+  position: absolute !important;
+  inset: 0 !important;
+  background: linear-gradient(to right, #ef4444, #22c55e, #ef4444) !important;
+  opacity: 0.5 !important;
+}
+
+.gauge-center {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  -webkit-transform: translate(-50%, -50%) !important;
+  width: 2px !important;
+  height: 14px !important;
+  background: #22c55e !important;
+  border-radius: 999px !important;
 }
 
 /* Note animations */
@@ -155,6 +223,30 @@ body {
     height: 100vh;
     height: -webkit-fill-available;
   }
+  
+  /* Force hardware acceleration pour gauge iOS */
+  .gauge, .gauge-needle, .gauge-track, .gauge-center {
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    will-change: transform;
+  }
+  
+  /* Amélioration contraste iOS */
+  .gauge-wrap {
+    background: rgba(20, 20, 31, 0.7) !important;
+  }
+  
+  /* Fix waveform iOS */
+  #waveform {
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+  }
+  
+  /* Status visible iOS */
+  .status-dot {
+    min-width: 12px !important;
+    min-height: 12px !important;
+  }
 }
 
 /* Android Chrome fixes */
@@ -186,6 +278,34 @@ body {
   /* GPU acceleration pour fluidité */
   transform: translateZ(0);
   will-change: transform;
+}
+
+/* Icône SVG microphone moderne */
+.mic-icon {
+  transition: color 0.3s ease, transform 0.2s ease;
+  color: #f5a623; /* Couleur par défaut amber */
+  width: 28px;
+  height: 28px;
+}
+
+.mic-btn:hover .mic-icon {
+  transform: scale(1.1);
+}
+
+.mic-btn.active .mic-icon {
+  color: #ef4444 !important; /* Rouge quand actif */
+  animation: pulse-mic-icon 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-mic-icon {
+  0%, 100% { 
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
 }
 
 /* Zone de touch élargie invisible */

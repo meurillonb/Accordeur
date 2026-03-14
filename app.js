@@ -340,10 +340,43 @@ function initDOM() {
   // Amélioration accessibilité mobile : gestion touch
   improveMobileAccessibility();
   
+  // iOS spécifique: préparation contexte audio
+  setupIOSAudio();
+  
   // Activer le mode debug si demandé
   if (DEBUG_MODE) {
-    document.getElementById('debug-panel').classList.remove('hidden');
-    console.log('🔧 Debug Mode Activated');
+    const debugPanel = document.getElementById('debug-panel');
+    if (debugPanel) {
+      debugPanel.classList.remove('hidden');
+      console.log('🔧 Debug Mode Activated');
+    }
+  }
+}
+
+// Configuration spéciale iOS
+function setupIOSAudio() {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  if (isIOS) {
+    console.log('🍎 iOS detected - preparing audio stack');
+    
+    // Hint visuel iOS
+    if (micLabel) {
+      micLabel.innerHTML += ' <span style="font-size:10px;color:#6b6b80;">(iOS: Autorisez micro)</span>';
+    }
+    
+    // Force création AudioContext au premier click
+    if (micBtn) {
+      micBtn.addEventListener('touchstart', async function iosPrep(e) {
+        if (!audioCtx) {
+          try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            console.log('iOS: AudioContext pré-créé');
+          } catch (err) {
+            console.warn('iOS AudioContext error:', err);
+          }
+        }
+      }, { once: true, passive: true });
+    }
   }
 }
 
@@ -696,22 +729,43 @@ async function startListening() {
     // Initialise Essentia
     await initEssentia();
 
-    // iOS nécessite des paramètres différents
+    // iOS nécessite des paramètres différents et interaction user
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    
+    // Configuration audio optimisée iOS
     const audioConstraints = {
       audio: isIOS ? {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: false
+        echoCancellation: false, // Désactivé pour meilleure qualité pitch
+        noiseSuppression: false, // Désactivé pour éviter artefacts
+        autoGainControl: false,
+        sampleRate: 44100, // Force sample rate stable
+        channelCount: 1, // Mono pour simplicité
+        sampleSize: 16
       } : {
         echoCancellation: false,
         noiseSuppression: false,
-        autoGainControl: false
+        autoGainControl: false,
+        sampleRate: 44100,
+        channelCount: 1
       }
     };
 
+    // Sur iOS, créer AudioContext AVANT getUserMedia pour éviter erreurs
+    if (isIOS) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // iOS nécessite resume() après interaction utilisateur
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+        console.log('iOS: AudioContext resumed');
+      }
+    }
+
     stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    if (!isIOS) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 4096; // Augmenté pour meilleure résolution fréquentielle (~10.8Hz à 44.1kHz)
     analyser.smoothingTimeConstant = 0.3; // Réduit pour réponse plus rapide
@@ -745,7 +799,20 @@ async function startListening() {
     lpFilter.connect(analyser);
     isListening = true;
     micBtn.classList.add('active');
-    micBtn.textContent = '🔴';
+    
+    // Change l'icône pour version active (SVG rouge)
+    const micIcon = micBtn.querySelector('.mic-icon');
+    if (micIcon) {
+      micIcon.innerHTML = `
+        <circle cx="12" cy="12" r="3" fill="currentColor"></circle>
+        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" fill="currentColor"></path>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2" fill="none"></path>
+        <line x1="12" y1="19" x2="12" y2="23"></line>
+        <line x1="8" y1="23" x2="16" y2="23"></line>
+      `;
+      micIcon.style.color = '#ef4444'; // Rouge quand actif
+    }
+    
     micLabel.textContent = 'Actif';
     statusDotEl.className = 'status-dot listening';
     statusTextEl.textContent = 'En écoute...';
@@ -753,7 +820,33 @@ async function startListening() {
     chordDisplay.textContent = '';
     processAudio();
   } catch (e) { 
-    alert('Microphone inaccessible : ' + e.message); 
+    console.error('Microphone error:', e);
+    
+    // Message d'erreur spécifique iOS
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (isIOS) {
+      alert('🍎 iOS: Allez dans Réglages > Confidentialité > Microphone > Safari/Chrome, puis rechargez la page.\\n\\nOu essayez depuis Chrome/Firefox externe plutôt que depuis l\\'app VS Code.');
+    } else {
+      alert('Microphone inaccessible : ' + e.message); 
+    }
+    
+    // Reset états
+    isListening = false;
+    micBtn.classList.remove('active');
+    
+    // Restaure icône microphone
+    const micIcon = micBtn.querySelector('.mic-icon');
+    if (micIcon) {
+      micIcon.innerHTML = `
+        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+        <line x1="12" y1="19" x2="12" y2="23"></line>
+        <line x1="8" y1="23" x2="16" y2="23"></line>
+      `;
+      micIcon.style.color = '#ef4444'; // Rouge pour erreur
+    }
+    
+    micLabel.textContent = 'Erreur';
   }
 }
 
@@ -775,7 +868,19 @@ function stopListening() {
   stabilityCounter = 0;
   
   micBtn.classList.remove('active');
-  micBtn.textContent = '🎙';
+  
+  // Restaure l'icône microphone inactive
+  const micIcon = micBtn.querySelector('.mic-icon');
+  if (micIcon) {
+    micIcon.innerHTML = `
+      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+      <line x1="12" y1="19" x2="12" y2="23"></line>
+      <line x1="8" y1="23" x2="16" y2="23"></line>
+    `;
+    micIcon.style.color = ''; // Couleur par défaut
+  }
+  
   micLabel.textContent = 'Écouter';
   statusDotEl.className = 'status-dot off';
   statusTextEl.textContent = 'Inactif';
