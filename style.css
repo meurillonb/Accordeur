@@ -32,16 +32,38 @@ body {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* États stabilisés - confirmés */
+.note-name.active-in-tune {
+  @apply text-accent-green;
+  animation: pulse-green 1s ease-in-out infinite;
+  text-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+}
+
+.note-name.active-sharp, .note-name.active-flat {
+  @apply text-accent-red;
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+/* États de détection - en cours */
+.note-name.detecting-in-tune {
+  @apply text-accent-green;
+  opacity: 0.8;
+  animation: pulse-detecting 0.8s ease-in-out infinite;
+}
+
+.note-name.detecting-sharp, .note-name.detecting-flat {
+  @apply text-accent-amber;
+  opacity: 0.7;
+  animation: pulse-detecting 0.6s ease-in-out infinite;
+}
+
+/* États obsolètes - compatibilité */
 .note-name.active {
   @apply text-accent-green;
   animation: pulse-green 1s ease-in-out infinite;
 }
 
-.note-name.sharp {
-  @apply text-accent-red;
-}
-
-.note-name.flat {
+.note-name.sharp, .note-name.flat {
   @apply text-accent-red;
 }
 
@@ -90,6 +112,11 @@ body {
   0% { box-shadow: 0 0 0 0 rgba(245, 166, 35, 0.4); }
   70% { box-shadow: 0 0 0 10px rgba(245, 166, 35, 0); }
   100% { box-shadow: 0 0 0 0 rgba(245, 166, 35, 0); }
+}
+
+@keyframes pulse-detecting {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.02); }
 }
 
 /* Waveform canvas styling */

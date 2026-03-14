@@ -55,55 +55,69 @@ async function initEssentia() {
 
 // Stabilise les détections de fréquence pour guitares réelles
 function stabilizeFrequency(newFreq) {
-  if (newFreq < 60 || newFreq > 500) return null; // Zone guitare uniquement
+  if (newFreq < 20 || newFreq > 2000) return null; // Plage élargie : permet tests + guitare  
   
-  // Ajoute à l'historique
-  frequencyHistory.push(newFreq);
-  if (frequencyHistory.length > 10) frequencyHistory.shift();
+  // Priorité aux fréquences guitare mais accepte autres pour débogage
+  const inGuitarRange = (newFreq >= 60 && newFreq <= 500);
   
-  // Vérifie la cohérence avec la fréquence stable actuelle
-  if (stableFrequency !== null) {
-    const diff = Math.abs(newFreq - stableFrequency);
+  // Si fréquence guitare, applique stabilisation complète
+  if (inGuitarRange) {
+    // Ajoute à l'historique
+    frequencyHistory.push(newFreq);
+    if (frequencyHistory.length > 10) frequencyHistory.shift();
     
-    if (diff <= FREQUENCY_TOLERANCE) {
-      // Fréquence cohérente, augmente la stabilité
-      stabilityCounter++;
-      stableFrequency = (stableFrequency * 0.8) + (newFreq * 0.2); // Lissage
-      return stableFrequency;
-    } else {
-      // Fréquence différente, reset
-      stabilityCounter = 0;
-      stableFrequency = null;
-    }
-  }
-  
-  // Pas de fréquence stable, recherche de consensus dans l'historique
-  if (frequencyHistory.length >= STABILITY_THRESHOLD) {
-    const recent = frequencyHistory.slice(-STABILITY_THRESHOLD);
-    let consensusFreq = null, maxCount = 0;
-    
-    for (let i = 0; i < recent.length; i++) {
-      let count = 0;
-      const baseFreq = recent[i];
+    // Vérifie la cohérence avec la fréquence stable actuelle
+    if (stableFrequency !== null) {
+      const diff = Math.abs(newFreq - stableFrequency);
       
-      for (let j = 0; j < recent.length; j++) {
-        if (Math.abs(recent[j] - baseFreq) <= FREQUENCY_TOLERANCE) {
-          count++;
+      if (diff <= FREQUENCY_TOLERANCE) {
+        // Fréquence cohérente, augmente la stabilité
+        stabilityCounter++;
+        stableFrequency = (stableFrequency * 0.8) + (newFreq * 0.2); // Lissage
+        return stableFrequency;
+      } else {
+        // Fréquence différente, reset
+        stabilityCounter = 0;
+        stableFrequency = null;
+      }
+    }
+    
+    // Pas de fréquence stable, recherche de consensus dans l'historique
+    if (frequencyHistory.length >= STABILITY_THRESHOLD) {
+      const recent = frequencyHistory.slice(-STABILITY_THRESHOLD);
+      let consensusFreq = null, maxCount = 0;
+      
+      for (let i = 0; i < recent.length; i++) {
+        let count = 0;
+        const baseFreq = recent[i];
+        
+        for (let j = 0; j < recent.length; j++) {
+          if (Math.abs(recent[j] - baseFreq) <= FREQUENCY_TOLERANCE) {
+            count++;
+          }
+        }
+        
+        if (count > maxCount) {
+          maxCount = count;
+          consensusFreq = baseFreq;
         }
       }
       
-      if (count > maxCount) {
-        maxCount = count;
-        consensusFreq = baseFreq;
+      // Si consensus trouvé (3+ détections cohérentes), devient stable
+      if (maxCount >= 3) {
+        stableFrequency = consensusFreq;
+        stabilityCounter = maxCount;
+        return stableFrequency;
       }
     }
-    
-    // Si consensus trouvé (3+ détections cohérentes), devient stable
-    if (maxCount >= 3) {
-      stableFrequency = consensusFreq;
-      stabilityCounter = maxCount;
-      return stableFrequency;
+  } else {
+    // Frequencies hors guitare : affichage direct sans stabilisation (pour tests)
+    // Reset la stabilisation si on sort de la zone guitare  
+    if (stableFrequency !== null) {
+      stabilityCounter = 0;
+      stableFrequency = null; 
     }
+    return newFreq; // Affichage immédiat pour tests/debug
   }
   
   return null; // Pas encore stable
@@ -373,56 +387,100 @@ function buildChromatic() {
 }
 
 // ──────── UI UPDATE ────────
-function updateUI(note) {
+function updateUI(note, isStabilized = true) {
   if (!note) {
     noteFrEl.textContent = '—'; noteUsEl.textContent = '—';
     noteFrEl.className = 'note-name idle'; noteUsEl.className = 'note-name idle';
     freqValEl.textContent = '— —';
     needleEl.style.left = '50%'; needleEl.style.background = 'var(--text-muted)'; needleEl.style.boxShadow = 'none';
-    centsEl.textContent = '';
-    chordDisplay.textContent = '';
+    if (centsEl) centsEl.textContent = '';
+    if (chordDisplay) chordDisplay.textContent = '';
     document.querySelectorAll('.chroma-note').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.string-status').forEach(el => el.classList.remove('active', 'in-tune', 'sharp', 'flat'));
     return;
   }
 
-  // Ajoute la note à l'historique
-  detectedNotes.push(note);
-  if (detectedNotes.length > 10) detectedNotes.shift();
-
+  // Affichage toujours immédiat des informations de base
   noteFrEl.textContent = note.fr; noteUsEl.textContent = note.us;
   freqValEl.textContent = note.freq;
 
+  // L'aiguille bouge toujours instantanément pour feedback visuel
   const pct = Math.max(2, Math.min(98, 50 + (note.cents / 100) * 50));
   needleEl.style.left = pct + '%';
 
   const abs = Math.abs(note.cents);
   let cls, color;
 
+  // Indication visuelle selon précision
   if (abs <= 5) {
-    cls = 'active-in-tune'; color = 'var(--green)';
-    statusTextEl.textContent = 'En Accord ✓'; statusDotEl.className = 'status-dot in-tune';
-    centsEl.textContent = '±' + abs + '¢';
+    cls = isStabilized ? 'active-in-tune' : 'detecting-in-tune'; 
+    color = 'var(--accent-green)';
+    if (centsEl) centsEl.textContent = '±' + abs + '¢';
   } else if (abs <= 20) {
-    cls = 'active-sharp'; color = 'var(--amber)';
-    statusTextEl.textContent = note.cents > 0 ? '♯ Trop haut' : '♭ Trop bas';
-    statusDotEl.className = 'status-dot listening';
-    centsEl.textContent = (note.cents > 0 ? '+' : '') + note.cents + '¢';
+    cls = isStabilized ? 'active-sharp' : 'detecting-sharp';
+    color = 'var(--accent-amber)';
+    if (centsEl) centsEl.textContent = (note.cents > 0 ? '+' : '') + note.cents + '¢';
   } else {
-    cls = 'active-flat'; color = 'var(--red)';
-    statusTextEl.textContent = note.cents > 0 ? '♯ Dièse' : '♭ Bémol';
-    statusDotEl.className = 'status-dot listening';
-    centsEl.textContent = (note.cents > 0 ? '+' : '') + note.cents + '¢';
+    cls = isStabilized ? 'active-flat' : 'detecting-flat';
+    color = 'var(--accent-red)';
+    if (centsEl) centsEl.textContent = (note.cents > 0 ? '+' : '') + note.cents + '¢';
   }
 
-  noteFrEl.className = 'note-name ' + cls; noteUsEl.className = 'note-name ' + cls;
-  needleEl.style.background = color; needleEl.style.boxShadow = `0 0 8px ${color}`;
+  // Aiguille colorée selon justesse
+  needleEl.style.background = color; 
+  needleEl.style.boxShadow = `0 0 8px ${color}`;
+  
+  // Notes affichées avec indication de stabilité
+  noteFrEl.className = 'note-name ' + cls; 
+  noteUsEl.className = 'note-name ' + cls;
 
+  // Indication note chromatique active
   document.querySelectorAll('.chroma-note').forEach(el => el.classList.remove('active'));
   const ac = document.getElementById(`chroma-${note.noteIdx}`);
   if (ac) ac.classList.add('active');
 
-  // Mettre à jour le statut des cordes
+  // Statut des cordes uniquement pour détections stables
+  if (isStabilized) {
+    updateStringStatus(note, abs);
+    
+    // Ajoute la note à l'historique pour accords
+    detectedNotes.push(note);
+    if (detectedNotes.length > 10) detectedNotes.shift();
+  }
+}
+
+// Met à jour le statut pour les notes stabilisées
+function updateStabilizedStatus(stableNote) {
+  const abs = Math.abs(stableNote.cents);
+  
+  // Statut textuel basé sur stabilisation
+  if (abs <= 5) {
+    statusTextEl.textContent = 'En Accord ✓'; 
+    statusDotEl.className = 'status-dot in-tune';
+  } else if (abs <= 20) {
+    statusTextEl.textContent = stableNote.cents > 0 ? '♯ Trop haut' : '♭ Trop bas';
+    statusDotEl.className = 'status-dot listening';
+  } else {
+    statusTextEl.textContent = stableNote.cents > 0 ? '♯ Dièse' : '♭ Bémol';
+    statusDotEl.className = 'status-dot listening';
+  }
+  
+  // Détection d'accord basée sur notes stables
+  const chord = detectChord(detectedNotes);
+  if (chord && detectedNotes.length >= 3) {
+    if (chordDisplay) {
+      chordDisplay.textContent = `🎸 Accord: ${chord.name}`;
+      chordDisplay.style.color = 'var(--accent-green)';
+    }
+  } else if (detectedNotes.length >= 3) {
+    if (chordDisplay) {
+      chordDisplay.textContent = '🔍 Accord non reconnu';
+      chordDisplay.style.color = 'var(--text-muted)';
+    }
+  }
+}
+
+function updateStringStatus(note, abs) {
   document.querySelectorAll('.string-status').forEach(stringEl => {
     stringEl.classList.remove('active', 'in-tune', 'sharp', 'flat');
     const stringNote = stringEl.getAttribute('data-note-us');
@@ -440,16 +498,6 @@ function updateUI(note) {
       }
     }
   });
-
-  // Détection d'accord
-  const chord = detectChord(detectedNotes);
-  if (chord && detectedNotes.length >= 3) {
-    chordDisplay.textContent = `🎸 Accord: ${chord.name}`;
-    chordDisplay.style.color = 'var(--green)';
-  } else if (detectedNotes.length >= 3) {
-    chordDisplay.textContent = '🔍 Accord non reconnu';
-    chordDisplay.style.color = 'var(--text-muted)';
-  }
 }
 
 // ──────── CANVAS ────────
@@ -511,39 +559,51 @@ function processAudio() {
     rawFreq = autoCorrelate(buf, audioCtx.sampleRate);
   }
 
-  // Stabilise la fréquence pour guitares réelles
-  const stabilizedFreq = stabilizeFrequency(rawFreq);
-  
-  if (stabilizedFreq && stabilizedFreq > 60 && stabilizedFreq < 500) {
-    const note = freqToNote(stabilizedFreq);
-    updateUI(note);
+  if (rawFreq > 40 && rawFreq < 2000) {
+    // Affichage immédiat pour feedback visuel (aiguille + osimero)
+    const immediateNote = freqToNote(rawFreq);
+    updateUI(immediateNote, false); // false = affichage non-stabilisé
     
-    // Mode debug : affichage des détails de détection
+    // Stabilisation en parallèle pour assistance accord
+    const stabilizedFreq = stabilizeFrequency(rawFreq);
+    if (stabilizedFreq) {
+      const stableNote = freqToNote(stabilizedFreq);
+      // Met à jour uniquement le statut et l'assistance (pas l'aiguille)
+      updateStabilizedStatus(stableNote);
+    }
+    
+    // Mode debug
     if (DEBUG_MODE) {
       console.log(`🎵 Raw frequency: ${rawFreq.toFixed(2)} Hz`);
-      console.log(`🔗 Stabilized frequency: ${stabilizedFreq.toFixed(2)} Hz`);
-      console.log(`📊 Stability: ${stabilityCounter}/${STABILITY_THRESHOLD}`);
-      console.log(`🎼 Note: ${note.us}/${note.fr}, Cents: ${note.cents > 0 ? '+' : ''}${note.cents}`);
+      if (stabilizedFreq) {
+        console.log(`🔗 Stabilized frequency: ${stabilizedFreq.toFixed(2)} Hz`);
+        console.log(`📊 Stability: ${stabilityCounter}/${STABILITY_THRESHOLD}`);
+      }
+      console.log(`🎼 Note: ${immediateNote.us}/${immediateNote.fr}, Cents: ${immediateNote.cents > 0 ? '+' : ''}${immediateNote.cents}`);
       
-      // Calculer RMS pour le niveau audio
       let rms = 0;
       for (let i = 0; i < buf.length; i++) {
         rms += buf[i] * buf[i];
       }
       rms = Math.sqrt(rms / buf.length);
       
-      // Afficher les infos de debug dans l'interface
-      document.getElementById('debug-freq').textContent = `${stabilizedFreq.toFixed(2)} Hz (raw: ${rawFreq.toFixed(2)})`;
-      document.getElementById('debug-method').textContent = essentia ? 'Essentia.js' : 'AutoCorrelation';
-      document.getElementById('debug-rms').textContent = rms.toFixed(4);
-      document.getElementById('debug-buffer').textContent = `${buf.length} samples`;
+      // Affichage debug
+      const debugFreq = document.getElementById('debug-freq');
+      const debugMethod = document.getElementById('debug-method');
+      const debugRms = document.getElementById('debug-rms');
+      const debugBuffer = document.getElementById('debug-buffer');
+      
+      if (debugFreq) debugFreq.textContent = `${rawFreq.toFixed(2)} Hz${stabilizedFreq ? ` (stable: ${stabilizedFreq.toFixed(2)})` : ''}`;
+      if (debugMethod) debugMethod.textContent = essentia ? 'Essentia.js' : 'AutoCorrelation';
+      if (debugRms) debugRms.textContent = rms.toFixed(4);
+      if (debugBuffer) debugBuffer.textContent = `${buf.length} samples`;
     }
   } else {
-    statusTextEl.textContent = stabilityCounter > 0 ? 
-      `En cours... (${stabilityCounter}/${STABILITY_THRESHOLD})` : 
-      'En écoute...';
+    // Reset affichage
+    updateUI(null, false);
+    statusTextEl.textContent = 'En écoute...';
     statusDotEl.className = 'status-dot listening';
-    chordDisplay.textContent = '';
+    if (chordDisplay) chordDisplay.textContent = '';
   }
   animFrameId = requestAnimationFrame(processAudio);
 }
