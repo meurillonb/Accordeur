@@ -95,7 +95,14 @@
         </div>
       </div>
 
-      <div class="status-row flex items-center justify-between bg-bg-secondary/30 rounded-lg px-4 py-3">
+      <!-- Waveform juste après la gauge pour cohérence visuelle -->
+      <div class="waveform-section mb-4">
+        <div class="waveform-wrap h-12 bg-bg-secondary/30 rounded-lg overflow-hidden mx-4">
+          <canvas id="waveform" class="w-full h-full"></canvas>
+        </div>
+      </div>
+
+      <div class="status-row flex items-center justify-between bg-bg-secondary/30 rounded-lg px-4 py-3 mx-4">
         <div class="flex items-center gap-3">
           <div class="status-dot w-3 h-3 rounded-full bg-text-muted" id="status-dot"></div>
           <span class="status-text text-sm font-medium" id="status-text">Inactif</span>
@@ -104,18 +111,7 @@
       </div>
 
       <!-- Zone de debug (masquée par défaut) -->
-      <div id="debug-panel" class="bg-bg-tertiary/50 rounded-lg p-3 mt-4 text-xs font-mono hidden">
-        <div class="text-accent-amber font-bold mb-2">🔧 Debug Info</div>
-        <div class="grid grid-cols-2 gap-2 text-text-dim">
-          <div>Frequency: <span id="debug-freq" class="text-text-primary">-</span></div>
-          <div>Method: <span id="debug-method" class="text-text-primary">-</span></div>
-          <div>RMS Level: <span id="debug-rms" class="text-text-primary">-</span></div>
-          <div>Buffer Size: <span id="debug-buffer" class="text-text-primary">-</span></div>
-        </div>
-      </div>
-
-      <!-- Zone de debug (masquée par défaut) -->
-      <div id="debug-panel" class="bg-bg-tertiary/50 rounded-lg p-3 mt-4 text-xs font-mono hidden">
+      <div id="debug-panel" class="bg-bg-tertiary/50 rounded-lg p-3 mt-4 text-xs font-mono hidden mx-4">
         <div class="text-accent-amber font-bold mb-2">🔧 Debug Info</div>
         <div class="grid grid-cols-2 gap-2 text-text-dim">
           <div>Frequency: <span id="debug-freq" class="text-text-primary">-</span></div>
@@ -132,14 +128,13 @@
       <div class="strings-grid grid grid-cols-6 gap-2" id="strings-grid"></div>
     </div>
 
-    <div class="mic-wave-row px-4 mb-6">
-      <div class="flex items-center gap-4">
-        <div class="mic-section flex-shrink-0">
-          <button class="mic-btn w-14 h-14 bg-accent-amber/20 hover:bg-accent-amber/30 active:bg-accent-amber/40 backdrop-blur-sm border border-accent-amber/30 rounded-full flex items-center justify-center text-2xl transition-all duration-200 transform hover:scale-105 active:scale-95" id="mic-btn" title="Activer le microphone">🎙</button>
-          <div class="mic-label text-xs text-center mt-2 text-text-dim" id="mic-label">Écouter</div>
-        </div>
-        <div class="waveform-wrap flex-1 h-12 bg-bg-secondary/30 rounded-lg overflow-hidden">
-          <canvas id="waveform" class="w-full h-full"></canvas>
+    <!-- Contrôle microphone centré -->
+    <div class="mic-section px-4 mb-6">
+      <div class="flex justify-center">
+        <div class="mic-container flex flex-col items-center">
+          <button class="mic-btn w-16 h-16 bg-accent-amber/20 hover:bg-accent-amber/30 active:bg-accent-amber/40 backdrop-blur-sm border-2 border-accent-amber/40 hover:border-accent-amber/60 rounded-full flex items-center justify-center text-3xl transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-accent-amber/25" id="mic-btn" title="Activer le microphone">🎙</button>
+          <div class="mic-label text-sm text-center mt-3 font-medium" id="mic-label">Écouter</div>
+          <div class="touch-hint text-xs text-center mt-1 text-text-dim opacity-70">Appuyez pour démarrer</div>
         </div>
       </div>
     </div>

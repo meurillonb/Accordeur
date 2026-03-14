@@ -30,6 +30,30 @@ body {
 /* Note animations */
 .note-name {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Largeur fixe pour éviter le déplacement */
+  min-width: 3.5rem; /* ~56px pour 2-3 caractères */
+  display: inline-block;
+  text-align: center;
+  font-variant-numeric: tabular-nums; /* Chiffres de largeur fixe */
+}
+
+.note-label {
+  /* Largeur fixe pour conteneur de notes */
+  min-width: 5rem;
+  flex-shrink: 0; /* Empêche réduction */
+}
+
+.freq-display {
+  /* Largeur fixe pour fréquences */
+  min-width: 6rem;
+  flex-shrink: 0;
+}
+
+.freq-value {
+  font-variant-numeric: tabular-nums; /* Chiffres alignés */
+  min-width: 5rem;
+  display: inline-block;
+  text-align: center;
 }
 
 /* États stabilisés - confirmés */
@@ -145,6 +169,123 @@ body {
 .gpu-accelerated {
   transform: translateZ(0);
   will-change: transform;
+}
+
+/* ────── ACCESSIBILITÉ MOBILE ────── */
+
+/* Zone de touch optimisée pour le bouton micro */
+.mic-btn {
+  /* Zone de touch élargie (+10px de chaque côté) */
+  position: relative;
+  min-width: 64px; /* Minimum Apple/Google guidelines */
+  min-height: 64px;
+  /* Amélioration du feedback tactile */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: rgba(245, 166, 35, 0.2);
+  /* GPU acceleration pour fluidité */
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Zone de touch élargie invisible */
+.mic-btn::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  right: -10px;
+  bottom: -10px;
+  /* Zone de touch élargie pour faciliter l'accès */
+}
+
+/* États visuels améliorés */
+.mic-btn.active {
+  background: rgba(245, 166, 35, 0.3) !important;
+  border-color: rgba(245, 166, 35, 0.8) !important;
+  box-shadow: 0 0 24px rgba(245, 166, 35, 0.4), 
+              0 0 8px rgba(245, 166, 35, 0.6);
+  animation: pulse-mic-active 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-mic-active {
+  0%, 100% { 
+    transform: scale(1);
+    box-shadow: 0 0 24px rgba(245, 166, 35, 0.4), 
+                0 0 8px rgba(245, 166, 35, 0.6);
+  }
+  50% { 
+    transform: scale(1.02);
+    box-shadow: 0 0 32px rgba(245, 166, 35, 0.6), 
+                0 0 12px rgba(245, 166, 35, 0.8);
+  }
+}
+
+/* Adaptation pour écrans tactiles et orientation */
+@media (max-width: 768px) {
+  /* Taille optimale pour pouces */
+  .mic-btn {
+    width: 72px !important;
+    height: 72px !important;
+    font-size: 2rem;
+  }
+  
+  /* Espace optimisé autour du bouton */
+  .mic-container {
+    padding: 1rem;
+  }
+  
+  /* Ajustement pour orientation paysage */
+  @media (orientation: landscape) {
+    .mic-btn {
+      width: 64px !important;
+      height: 64px !important;
+    }
+    .mic-container {
+      padding: 0.5rem;
+    }
+    .touch-hint {
+      display: none; /* Cache l'aide en mode paysage */
+    }
+  }
+}
+
+/* Zone d'accessibilité étendue pour petits écrans */
+@media (max-width: 480px) {
+  .mic-btn {
+    width: 80px !important;
+    height: 80px !important;
+    font-size: 2.25rem;
+  }
+}
+
+/* Support pour utilisateurs gauchers/droitiers */
+@media (pointer: fine) {
+  /* Souris/trackpad - bouton un peu plus petit */
+  .mic-btn {
+    width: 64px !important;
+    height: 64px !important;
+  }
+}
+
+/* Amélioration pour touch screens */
+@media (pointer: coarse) {
+  /* Touch - bouton plus grand */
+  .mic-btn {
+    min-width: 72px;
+    min-height: 72px;
+  }
+  
+  /* Suppression des effets hover sur touch */
+  .mic-btn:hover {
+    transform: none;
+  }
+  
+  /* Focus visible amélioré pour navigation clavier */
+  .mic-btn:focus-visible {
+    outline: 3px solid rgba(245, 166, 35, 0.6);
+    outline-offset: 4px;
+  }
 }
 
 /* Dark mode forced */
@@ -596,13 +737,42 @@ header h1 {
 }
 
 .string-status.in-tune {
-  border-color: var(--green);
-  background: rgba(52, 211, 153, 0.1);
-  box-shadow: 0 0 14px var(--green);
+  border-color: var(--accent-green);
+  background: var(--accent-green);
+  border-radius: 50%; /* Forme circulaire */
+  color: var(--bg-primary); /* Texte noir pour contraste sur fond vert */
+  
+  /* Effet glow vert */
+  box-shadow: 0 0 20px var(--accent-green),
+              0 0 10px var(--accent-green),
+              inset 0 0 15px rgba(255, 255, 255, 0.2);
+              
+  /* Animation pulse continue */
+  animation: pulse-string-tune 2s ease-in-out infinite;
+  
+  /* Transition fluide */
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Animation pulse pour corde accordée */
+@keyframes pulse-string-tune {
+  0%, 100% { 
+    transform: scale(1);
+    box-shadow: 0 0 20px var(--accent-green),
+                0 0 10px var(--accent-green),
+                inset 0 0 15px rgba(255, 255, 255, 0.2);
+  }
+  50% { 
+    transform: scale(1.05);
+    box-shadow: 0 0 28px var(--accent-green),
+                0 0 16px var(--accent-green),
+                inset 0 0 20px rgba(255, 255, 255, 0.3);
+  }
 }
 
 .string-status.in-tune .s-status-icon {
-  color: var(--green);
+  color: var(--bg-primary); /* Icône noire sur fond vert */
+  font-weight: bold;
 }
 
 .string-status.sharp {

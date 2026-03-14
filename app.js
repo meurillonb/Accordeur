@@ -10,12 +10,12 @@ const NOTE_NAMES_FR = ['Do', 'Do#', 'Ré', 'Ré#', 'Mi', 'Fa', 'Fa#', 'Sol', 'So
 const DEBUG_MODE = window.location.search.includes('debug=true');
 
 const GUITAR_STRINGS = [
-  { string: 1, us: 'E', fr: 'Mi', freq: 82.41 },
-  { string: 2, us: 'A', fr: 'La', freq: 110.00 },
-  { string: 3, us: 'D', fr: 'Ré', freq: 146.83 },
-  { string: 4, us: 'G', fr: 'Sol', freq: 196.00 },
-  { string: 5, us: 'B', fr: 'Si', freq: 246.94 },
-  { string: 6, us: 'e', fr: 'Mi', freq: 329.63 },
+  { string: 1, us: 'E', fr: 'Mi', freq: 82.41, octave: 2 },
+  { string: 2, us: 'A', fr: 'La', freq: 110.00, octave: 2 },
+  { string: 3, us: 'D', fr: 'Ré', freq: 146.83, octave: 3 },
+  { string: 4, us: 'G', fr: 'Sol', freq: 196.00, octave: 3 },
+  { string: 5, us: 'B', fr: 'Si', freq: 246.94, octave: 3 },
+  { string: 6, us: 'E', fr: 'Mi', freq: 329.63, octave: 4 },
 ];
 
 // Accords standards (triplets de fréquences: corde6, corde5, corde4)
@@ -337,11 +337,51 @@ function initDOM() {
   // Créer élément d'affichage d'accord
   chordDisplay = createChordDisplay();
   
+  // Amélioration accessibilité mobile : gestion touch
+  improveMobileAccessibility();
+  
   // Activer le mode debug si demandé
   if (DEBUG_MODE) {
     document.getElementById('debug-panel').classList.remove('hidden');
     console.log('🔧 Debug Mode Activated');
   }
+}
+
+// Améliorations accessibilité mobile
+function improveMobileAccessibility() {
+  if (!micBtn) return;
+  
+  // Feedback tactile (si disponible)
+  micBtn.addEventListener('click', () => {
+    if ('vibrate' in navigator) {
+      navigator.vibrate(50); // Courte vibration de confirmation
+    }
+  });
+  
+  // Support gestes alternatifs  
+  let touchStartTime = 0;
+  micBtn.addEventListener('touchstart', (e) => {
+    touchStartTime = Date.now();
+    e.preventDefault(); // Évite le double-tap zoom
+  });
+  
+  // Empêche les actions accidentelles
+  micBtn.addEventListener('touchend', (e) => {
+    const touchDuration = Date.now() - touchStartTime;
+    if (touchDuration < 50) {
+      // Touch trop rapide, probablement accidentelle
+      e.preventDefault();
+      return;
+    }
+  });
+  
+  // Focus amélioré pour navigation clavier
+  micBtn.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      micBtn.click();
+    }
+  });
 }
 
 function createChordDisplay() {
@@ -396,7 +436,11 @@ function updateUI(note, isStabilized = true) {
     if (centsEl) centsEl.textContent = '';
     if (chordDisplay) chordDisplay.textContent = '';
     document.querySelectorAll('.chroma-note').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.string-status').forEach(el => el.classList.remove('active', 'in-tune', 'sharp', 'flat'));
+    document.querySelectorAll('.string-status').forEach(el => {
+      el.classList.remove('active', 'in-tune', 'sharp', 'flat');
+      el.style.borderColor = '';
+      el.style.opacity = '0.7';
+    });
     return;
   }
 
@@ -439,7 +483,9 @@ function updateUI(note, isStabilized = true) {
   const ac = document.getElementById(`chroma-${note.noteIdx}`);
   if (ac) ac.classList.add('active');
 
-  // Statut des cordes uniquement pour détections stables
+  // Statut des cordes : toujours feedback immédiat + validation pour stabilisée
+  updateStringStatusImmediate(note, abs);
+  
   if (isStabilized) {
     updateStringStatus(note, abs);
     
@@ -485,17 +531,53 @@ function updateStringStatus(note, abs) {
     stringEl.classList.remove('active', 'in-tune', 'sharp', 'flat');
     const stringNote = stringEl.getAttribute('data-note-us');
     const stringFreq = parseFloat(stringEl.getAttribute('data-freq'));
+    const detectedFreq = parseFloat(note.freq);
     
-    // Vérifie si la note détectée correspond à cette corde (même note, fréquence proche)
-    if (note.us === stringNote && Math.abs(parseFloat(note.freq) - stringFreq) < 30) {
+    // Différenciation par fréquence plutôt que par note seule (évite confusion E grave/aigu)
+    const freqDiff = Math.abs(detectedFreq - stringFreq);
+    const isMatchingString = (
+      note.us === stringNote && 
+      freqDiff < 50 // Tolérance élargie à 50Hz
+    );
+    
+    if (isMatchingString) {
       stringEl.classList.add('active');
-      if (abs <= 5) {
+      
+      // Seuils plus permissifs pour validation visuelle
+      if (abs <= 10) { // Plus permissif : 10 cents au lieu de 5
         stringEl.classList.add('in-tune');
-      } else if (abs <= 20) {
-        stringEl.classList.add('sharp');
+      } else if (abs <= 25) { // Plus permissif : 25 cents au lieu de 20
+        stringEl.classList.add(note.cents > 0 ? 'sharp' : 'flat');
       } else {
-        stringEl.classList.add('flat');
+        stringEl.classList.add('flat'); // Très désaccordé
       }
+    }
+  });
+}
+
+// Version pour affichage immédiat (moins restrictive)
+function updateStringStatusImmediate(note, abs) {
+  if (!note) return;
+  
+  document.querySelectorAll('.string-status').forEach(stringEl => {
+    const stringNote = stringEl.getAttribute('data-note-us');
+    const stringFreq = parseFloat(stringEl.getAttribute('data-freq'));
+    const detectedFreq = parseFloat(note.freq);
+    
+    const freqDiff = Math.abs(detectedFreq - stringFreq);
+    const isCloseMatch = (
+      note.us === stringNote && 
+      freqDiff < 60 // Encore plus permissif pour feedback immédiat
+    );
+    
+    if (isCloseMatch) {
+      // Feedback visuel léger pour indication immédiate
+      stringEl.style.borderColor = abs <= 15 ? 'var(--accent-green)' : 'var(--accent-amber)';
+      stringEl.style.opacity = '1';
+    } else {
+      // Reset style si pas correspondant
+      stringEl.style.borderColor = '';
+      stringEl.style.opacity = '0.7';
     }
   });
 }
