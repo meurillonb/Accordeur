@@ -34,6 +34,13 @@ let isListening = false, animFrameId = null;
 let essentia = null;
 let detectedNotes = []; // Historique des dernières notes détectées
 
+// Système de stabilisation pour guitares réelles
+let frequencyHistory = []; // Historique des fréquences détectées
+let stableFrequency = null; // Fréquence stable actuelle
+let stabilityCounter = 0; // Compteur de stabilité
+const STABILITY_THRESHOLD = 5; // Nombre de détections cohérentes requises
+const FREQUENCY_TOLERANCE = 8; // Tolérance en Hz pour considérer 2 fréquences comme identiques
+
 // ──────── ESSENTIA.JS INIT ────────
 async function initEssentia() {
   try {
@@ -45,6 +52,63 @@ async function initEssentia() {
 }
 
 // ──────── PITCH DETECTION ────────
+
+// Stabilise les détections de fréquence pour guitares réelles
+function stabilizeFrequency(newFreq) {
+  if (newFreq < 60 || newFreq > 500) return null; // Zone guitare uniquement
+  
+  // Ajoute à l'historique
+  frequencyHistory.push(newFreq);
+  if (frequencyHistory.length > 10) frequencyHistory.shift();
+  
+  // Vérifie la cohérence avec la fréquence stable actuelle
+  if (stableFrequency !== null) {
+    const diff = Math.abs(newFreq - stableFrequency);
+    
+    if (diff <= FREQUENCY_TOLERANCE) {
+      // Fréquence cohérente, augmente la stabilité
+      stabilityCounter++;
+      stableFrequency = (stableFrequency * 0.8) + (newFreq * 0.2); // Lissage
+      return stableFrequency;
+    } else {
+      // Fréquence différente, reset
+      stabilityCounter = 0;
+      stableFrequency = null;
+    }
+  }
+  
+  // Pas de fréquence stable, recherche de consensus dans l'historique
+  if (frequencyHistory.length >= STABILITY_THRESHOLD) {
+    const recent = frequencyHistory.slice(-STABILITY_THRESHOLD);
+    let consensusFreq = null, maxCount = 0;
+    
+    for (let i = 0; i < recent.length; i++) {
+      let count = 0;
+      const baseFreq = recent[i];
+      
+      for (let j = 0; j < recent.length; j++) {
+        if (Math.abs(recent[j] - baseFreq) <= FREQUENCY_TOLERANCE) {
+          count++;
+        }
+      }
+      
+      if (count > maxCount) {
+        maxCount = count;
+        consensusFreq = baseFreq;
+      }
+    }
+    
+    // Si consensus trouvé (3+ détections cohérentes), devient stable
+    if (maxCount >= 3) {
+      stableFrequency = consensusFreq;
+      stabilityCounter = maxCount;
+      return stableFrequency;
+    }
+  }
+  
+  return null; // Pas encore stable
+}
+
 function freqToNote(freq) {
   if (!freq || freq < 20) return null;
   const noteNum = 12 * (Math.log2(freq / 440)) + 69;
@@ -54,48 +118,146 @@ function freqToNote(freq) {
   return { noteIdx, cents, us: NOTE_NAMES_US[noteIdx], fr: NOTE_NAMES_FR[noteIdx], freq: freq.toFixed(1) };
 }
 
-// Essentia pitch detection utilisant spectral analysis
+// Essentia pitch detection optimisé pour guitares acoustiques 
 function detectPitchEssentia(audioBuffer) {
   if (!essentia || !audioBuffer) return -1;
   try {
+    // Pré-emphasis pour renforcer les hautes fréquences
+    const preEmphasized = new Float32Array(audioBuffer.length);
+    for (let i = 1; i < audioBuffer.length; i++) {
+      preEmphasized[i] = audioBuffer[i] - 0.97 * audioBuffer[i - 1];
+    }
+    
     // Applique une fenêtre de Hann
-    const windowed = essentia.arrayToVector(audioBuffer);
+    const windowed = essentia.arrayToVector(preEmphasized);
     const windowed_hann = essentia.Windowing(windowed, 'hann');
     
-    // Calcul du spectre
+    // Calcul du spectre avec zero-padding pour meilleure résolution
     const spectrum = essentia.Spectrum(windowed_hann);
     
-    // Détection du pitch avec méthode SpectralPeaks + PitchDetection
-    const { peaks_frequencies, peaks_magnitudes } = essentia.SpectralPeaks(spectrum, 10);
-    
-    // Utilise le pic spectral le plus élevé comme fréquence fondamentale
-    if (peaks_frequencies.length > 0 && peaks_magnitudes[0] > 0.01) {
-      return peaks_frequencies[0];
+    // Détection robuste avec plusieurs méthodes
+    try {
+      // Méthode 1: Spectral Peaks avec filtrage harmonique
+      const { peaks_frequencies, peaks_magnitudes } = essentia.SpectralPeaks(
+        spectrum, 
+        20, // Plus de pics pour analyse harmonique
+        40, // Seuil minimum plus bas 
+        10000, // Fréquence max pour guitare
+        0.5  // Tolédance harmonique
+      );
+      
+      // Trouve la fréquence fondamentale parmi les pics
+      if (peaks_frequencies.length > 0) {
+        // Cherche le pic dominant dans la plage guitare (60-500Hz)
+        let bestFreq = -1, bestMag = 0;
+        
+        for (let i = 0; i < peaks_frequencies.length; i++) {
+          const freq = peaks_frequencies[i];
+          const mag = peaks_magnitudes[i];
+          
+          // Zone principale des cordes de guitare 
+          if (freq >= 60 && freq <= 500 && mag > bestMag && mag > 0.003) {
+            bestFreq = freq;
+            bestMag = mag;
+          }
+        }
+        
+        if (bestFreq > 0) return bestFreq;
+        
+        // Si pas trouvé, prend le premier pic significatif
+        if (peaks_magnitudes[0] > 0.002) {
+          return peaks_frequencies[0];
+        }
+      }
+      
+    } catch (peaksError) {
+      console.warn('SpectralPeaks error:', peaksError);
     }
+    
+    // Méthode 2: YinFFT comme fallback
+    try {
+      const yinFreq = essentia.PitchYinFFT(windowed_hann);
+      if (yinFreq > 60 && yinFreq < 500) {
+        return yinFreq;
+      }
+    } catch (yinError) {
+      console.warn('YinFFT error:', yinError);
+    }
+    
   } catch (e) {
     console.warn('Essentia detection error:', e);
   }
   return -1;
 }
 
-// Fallback: autocorrélation améliorée
+// Fallback: autocorrélation améliorée pour guitares acoustiques
 function autoCorrelate(buf, sr) {
   const SIZE = buf.length, MAX = Math.floor(SIZE / 2);
+  
+  // Détection de niveau audio plus sensible
   let rms = 0;
   for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
   rms = Math.sqrt(rms / SIZE);
-  if (rms < 0.01) return -1;
+  if (rms < 0.003) return -1; // Seuil plus bas pour guitares acoustiques
 
-  let best = -1, bestC = 0, lastC = 1, found = false;
-  for (let o = 8; o < MAX; o++) {
-    let c = 0;
-    for (let i = 0; i < MAX; i++) c += Math.abs(buf[i] - buf[i + o]);
-    c = 1 - c / MAX;
-    if (c > 0.9 && c > lastC) { found = true; if (c > bestC) { bestC = c; best = o; } }
-    else if (found) return sr / best;
-    lastC = c;
+  // Pré-emphasis pour améliorer détection fondamentale
+  const emphasized = new Float32Array(SIZE);
+  for (let i = 1; i < SIZE; i++) {
+    emphasized[i] = buf[i] - 0.95 * buf[i - 1];
   }
-  return best !== -1 ? sr / best : -1;
+
+  // Recherche optimisée pour guitares (60Hz-500Hz principalement)  
+  const minPeriod = Math.floor(sr / 500); // 500Hz max
+  const maxPeriod = Math.floor(sr / 60);  // 60Hz min
+  const searchStart = Math.max(minPeriod, 8);
+  const searchEnd = Math.min(maxPeriod, MAX);
+  
+  let best = -1, bestC = 0;
+  let foundCandidate = false;
+  
+  // Autocorrélation avec seuil plus permissif
+  for (let o = searchStart; o < searchEnd; o++) {
+    let correlation = 0, normA = 0, normB = 0;
+    
+    for (let i = 0; i < MAX; i++) {
+      const a = emphasized[i];
+      const b = emphasized[i + o];
+      correlation += a * b;
+      normA += a * a;
+      normB += b * b;
+    }
+    
+    // Coefficient de corrélation normalisé
+    const normalizedCorr = normA * normB > 0 ? correlation / Math.sqrt(normA * normB) : 0;
+    
+    // Seuil plus permissif pour guitares (0.6 au lieu de 0.9)
+    if (normalizedCorr > 0.6 && normalizedCorr > bestC) {
+      bestC = normalizedCorr;
+      best = o;
+      foundCandidate = true;
+    }
+  }
+  
+  // Affinage par interpolation parabolique si confident
+  if (foundCandidate && bestC > 0.7 && best > searchStart && best < searchEnd - 1) {
+    const y1 = bestC;
+    let y0 = 0, y2 = 0;
+    
+    // Recalcule la corrélation pour les points adjacents
+    for (let i = 0; i < MAX; i++) {
+      const a = emphasized[i];
+      y0 += a * emphasized[i + best - 1];
+      y2 += a * emphasized[i + best + 1];
+    }
+    
+    const denom = 2 * (2 * y1 - y0 - y2);
+    if (Math.abs(denom) > 0.0001) {
+      const offset = (y2 - y0) / denom;
+      best += offset;
+    }
+  }
+  
+  return foundCandidate ? sr / best : -1;
 }
 
 // ──────── CHORD DETECTION ────────
@@ -337,25 +499,30 @@ function processAudio() {
   drawWaveform(timeBuf);
 
   // Utilise Essentia pour la détection si disponible, sinon fallback
-  let freq = -1;
+  let rawFreq = -1;
   if (essentia) {
     try {
-      freq = detectPitchEssentia(buf);
+      rawFreq = detectPitchEssentia(buf);
     } catch (e) {
       console.warn('Essentia error, using fallback');
-      freq = autoCorrelate(buf, audioCtx.sampleRate);
+      rawFreq = autoCorrelate(buf, audioCtx.sampleRate);
     }
   } else {
-    freq = autoCorrelate(buf, audioCtx.sampleRate);
+    rawFreq = autoCorrelate(buf, audioCtx.sampleRate);
   }
 
-  if (freq > 40 && freq < 2000) {
-    updateUI(freqToNote(freq));
+  // Stabilise la fréquence pour guitares réelles
+  const stabilizedFreq = stabilizeFrequency(rawFreq);
+  
+  if (stabilizedFreq && stabilizedFreq > 60 && stabilizedFreq < 500) {
+    const note = freqToNote(stabilizedFreq);
+    updateUI(note);
     
     // Mode debug : affichage des détails de détection
     if (DEBUG_MODE) {
-      const note = freqToNote(freq);
-      console.log(`🎵 Frequency detected: ${freq.toFixed(2)} Hz`);
+      console.log(`🎵 Raw frequency: ${rawFreq.toFixed(2)} Hz`);
+      console.log(`🔗 Stabilized frequency: ${stabilizedFreq.toFixed(2)} Hz`);
+      console.log(`📊 Stability: ${stabilityCounter}/${STABILITY_THRESHOLD}`);
       console.log(`🎼 Note: ${note.us}/${note.fr}, Cents: ${note.cents > 0 ? '+' : ''}${note.cents}`);
       
       // Calculer RMS pour le niveau audio
@@ -366,13 +533,15 @@ function processAudio() {
       rms = Math.sqrt(rms / buf.length);
       
       // Afficher les infos de debug dans l'interface
-      document.getElementById('debug-freq').textContent = `${freq.toFixed(2)} Hz`;
+      document.getElementById('debug-freq').textContent = `${stabilizedFreq.toFixed(2)} Hz (raw: ${rawFreq.toFixed(2)})`;
       document.getElementById('debug-method').textContent = essentia ? 'Essentia.js' : 'AutoCorrelation';
       document.getElementById('debug-rms').textContent = rms.toFixed(4);
       document.getElementById('debug-buffer').textContent = `${buf.length} samples`;
     }
   } else {
-    statusTextEl.textContent = 'En écoute...';
+    statusTextEl.textContent = stabilityCounter > 0 ? 
+      `En cours... (${stabilityCounter}/${STABILITY_THRESHOLD})` : 
+      'En écoute...';
     statusDotEl.className = 'status-dot listening';
     chordDisplay.textContent = '';
   }
@@ -402,29 +571,36 @@ async function startListening() {
     stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 2048;
-    analyser.smoothingTimeConstant = 0.8;
+    analyser.fftSize = 4096; // Augmenté pour meilleure résolution fréquentielle (~10.8Hz à 44.1kHz)
+    analyser.smoothingTimeConstant = 0.3; // Réduit pour réponse plus rapide
     
     source = audioCtx.createMediaStreamSource(stream);
     
-    // Ajouter filtre passe-haut pour éliminer le bruit ambiant
+    // Filtre passe-haut plus permissif pour guitare
     const hpFilter = audioCtx.createBiquadFilter();
     hpFilter.type = 'highpass';
-    hpFilter.frequency.value = 50; // 50Hz - élimine le rumble
-    hpFilter.Q.value = 1;
+    hpFilter.frequency.value = 30; // 30Hz - preserve Mi grave (82.41Hz) avec marge
+    hpFilter.Q.value = 0.7;
     
-    // Compressor pour normaliser les niveaux
+    // Compressor optimisé pour instruments acoustiques
     const compressor = audioCtx.createDynamicsCompressor();
-    compressor.threshold.value = -50;
-    compressor.knee.value = 40;
-    compressor.ratio.value = 12;
-    compressor.attack.value = 0.003;
-    compressor.release.value = 0.25;
+    compressor.threshold.value = -35; // Seuil plus haut pour préserver la dynamique
+    compressor.knee.value = 15; // Transition plus douce
+    compressor.ratio.value = 6; // Compression plus modérée
+    compressor.attack.value = 0.01; // Attack plus rapide pour guitar picking
+    compressor.release.value = 0.1; // Release adapté aux notes de guitare
     
-    // Chaîne: source -> HPF -> compressor -> analyser
+    // Filtre passe-bas pour supprimer les bruits HF
+    const lpFilter = audioCtx.createBiquadFilter();
+    lpFilter.type = 'lowpass';
+    lpFilter.frequency.value = 1500; // Limite pour harmoniques guitare
+    lpFilter.Q.value = 0.5;
+    
+    // Chaîne: source -> HPF -> compressor -> LPF -> analyser
     source.connect(hpFilter);
     hpFilter.connect(compressor);
-    compressor.connect(analyser);
+    compressor.connect(lpFilter);
+    lpFilter.connect(analyser);
     isListening = true;
     micBtn.classList.add('active');
     micBtn.textContent = '🔴';
@@ -450,6 +626,12 @@ function stopListening() {
   source = null;
   stream = null;
   detectedNotes = [];
+  
+  // Reset du système de stabilisation
+  frequencyHistory = [];
+  stableFrequency = null;
+  stabilityCounter = 0;
+  
   micBtn.classList.remove('active');
   micBtn.textContent = '🎙';
   micLabel.textContent = 'Écouter';
