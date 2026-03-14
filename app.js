@@ -387,24 +387,7 @@ function improveMobileAccessibility() {
   // Feedback tactile (si disponible)
   micBtn.addEventListener('click', () => {
     if ('vibrate' in navigator) {
-      navigator.vibrate(50); // Courte vibration de confirmation
-    }
-  });
-  
-  // Support gestes alternatifs  
-  let touchStartTime = 0;
-  micBtn.addEventListener('touchstart', (e) => {
-    touchStartTime = Date.now();
-    e.preventDefault(); // Évite le double-tap zoom
-  });
-  
-  // Empêche les actions accidentelles
-  micBtn.addEventListener('touchend', (e) => {
-    const touchDuration = Date.now() - touchStartTime;
-    if (touchDuration < 50) {
-      // Touch trop rapide, probablement accidentelle
-      e.preventDefault();
-      return;
+      navigator.vibrate(50);
     }
   });
   
@@ -548,13 +531,11 @@ function updateStabilizedStatus(stableNote) {
   const chord = detectChord(detectedNotes);
   if (chord && detectedNotes.length >= 3) {
     if (chordDisplay) {
-      chordDisplay.textContent = `🎸 Accord: ${chord.name}`;
-      chordDisplay.style.color = 'var(--accent-green)';
+      if (chordDisplay) { chordDisplay.textContent = `🎸 Accord: ${chord.name}`; chordDisplay.style.color = 'var(--accent-green)'; }
     }
   } else if (detectedNotes.length >= 3) {
     if (chordDisplay) {
-      chordDisplay.textContent = '🔍 Accord non reconnu';
-      chordDisplay.style.color = 'var(--text-muted)';
+      if (chordDisplay) { chordDisplay.textContent = '🔍 Accord non reconnu'; chordDisplay.style.color = 'var(--text-muted)'; }
     }
   }
 }
@@ -752,7 +733,9 @@ async function startListening() {
 
     // Sur iOS, créer AudioContext AVANT getUserMedia pour éviter erreurs
     if (isIOS) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
       // iOS nécessite resume() après interaction utilisateur
       if (audioCtx.state === 'suspended') {
         await audioCtx.resume();
@@ -817,7 +800,7 @@ async function startListening() {
     statusDotEl.className = 'status-dot listening';
     statusTextEl.textContent = 'En écoute...';
     detectedNotes = [];
-    chordDisplay.textContent = '';
+    if (chordDisplay) chordDisplay.textContent = '';
     processAudio();
   } catch (e) { 
     console.error('Microphone error:', e);
@@ -825,7 +808,7 @@ async function startListening() {
     // Message d'erreur spécifique iOS
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     if (isIOS) {
-      alert('🍎 iOS: Allez dans Réglages > Confidentialité > Microphone > Safari/Chrome, puis rechargez la page.\\n\\nOu essayez depuis Chrome/Firefox externe plutôt que depuis l\\'app VS Code.');
+      alert('🍎 iOS: Allez dans Réglages > Confidentialité > Microphone > Safari/Chrome, puis rechargez la page.');
     } else {
       alert('Microphone inaccessible : ' + e.message); 
     }
