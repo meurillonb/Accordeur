@@ -9,6 +9,24 @@ const NOTE_NAMES_FR = ['Do', 'Do#', 'Ré', 'Ré#', 'Mi', 'Fa', 'Fa#', 'Sol', 'So
 // Mode debug pour tester la détection
 const DEBUG_MODE = window.location.search.includes('debug=true');
 
+// Détection iOS robuste (iOS 15 à 26+, iPadOS, iPhone 15 Pro, etc.)
+function detectIOS() {
+  const ua = navigator.userAgent;
+  // Méthode 1: UA classique (iOS < 17)
+  if (/iPad|iPhone|iPod/.test(ua)) return true;
+  // Méthode 2: iPad avec desktop UA (iPadOS 13+)
+  if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true;
+  // Méthode 3: Safari mobile WebKit (iOS 17+, 26+)
+  if (/Macintosh/.test(ua) && 'ontouchend' in document) return true;
+  // Méthode 4: webkit spécifique iOS
+  if (window.webkit && window.webkit.messageHandlers) return true;
+  // Méthode 5: Vérifie les API spécifiques iOS
+  if (/AppleWebKit/.test(ua) && /Mobile/.test(ua)) return true;
+  return false;
+}
+const IS_IOS = detectIOS();
+console.log('[Platform] iOS:', IS_IOS, '| UA:', navigator.userAgent);
+
 const GUITAR_STRINGS = [
   { string: 1, us: 'E', fr: 'Mi', freq: 82.41, octave: 2 },
   { string: 2, us: 'A', fr: 'La', freq: 110.00, octave: 2 },
@@ -355,28 +373,8 @@ function initDOM() {
 
 // Configuration spéciale iOS
 function setupIOSAudio() {
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  if (isIOS) {
-    console.log('🍎 iOS detected - preparing audio stack');
-    
-    // Hint visuel iOS
-    if (micLabel) {
-      micLabel.innerHTML += ' <span style="font-size:10px;color:#6b6b80;">(iOS: Autorisez micro)</span>';
-    }
-    
-    // Force création AudioContext au premier click
-    if (micBtn) {
-      micBtn.addEventListener('touchstart', async function iosPrep(e) {
-        if (!audioCtx) {
-          try {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            console.log('iOS: AudioContext pré-créé');
-          } catch (err) {
-            console.warn('iOS AudioContext error:', err);
-          }
-        }
-      }, { once: true, passive: true });
-    }
+  if (IS_IOS) {
+    console.log('🍎 iOS detected - mode compatible activé');
   }
 }
 
@@ -710,44 +708,32 @@ async function startListening() {
     // Initialise Essentia
     await initEssentia();
 
-    // iOS nécessite des paramètres différents et interaction user
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    
-    // Configuration audio optimisée iOS
+    console.log('[Audio] iOS detected:', IS_IOS);
+
+    // Contraintes audio simples — iOS Safari ne supporte PAS sampleRate/channelCount/sampleSize
     const audioConstraints = {
-      audio: isIOS ? {
-        echoCancellation: false, // Désactivé pour meilleure qualité pitch
-        noiseSuppression: false, // Désactivé pour éviter artefacts
-        autoGainControl: false,
-        sampleRate: 44100, // Force sample rate stable
-        channelCount: 1, // Mono pour simplicité
-        sampleSize: 16
-      } : {
+      audio: {
         echoCancellation: false,
         noiseSuppression: false,
-        autoGainControl: false,
-        sampleRate: 44100,
-        channelCount: 1
+        autoGainControl: false
       }
     };
 
-    // Sur iOS, créer AudioContext AVANT getUserMedia pour éviter erreurs
-    if (isIOS) {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      // iOS nécessite resume() après interaction utilisateur
-      if (audioCtx.state === 'suspended') {
-        await audioCtx.resume();
-        console.log('iOS: AudioContext resumed');
-      }
-    }
-
+    // 1. D'abord demander le micro (déclenche la permission iOS)
+    console.log('[Audio] Requesting microphone...');
     stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
-    
-    if (!isIOS) {
+    console.log('[Audio] Microphone granted, tracks:', stream.getAudioTracks().length);
+
+    // 2. Ensuite créer l'AudioContext (après le geste utilisateur)
+    if (!audioCtx || audioCtx.state === 'closed') {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
+    
+    // 3. Resume si suspendu (obligatoire iOS)
+    if (audioCtx.state === 'suspended') {
+      await audioCtx.resume();
+    }
+    console.log('[Audio] AudioContext state:', audioCtx.state, '| sampleRate:', audioCtx.sampleRate);
     
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 4096; // Augmenté pour meilleure résolution fréquentielle (~10.8Hz à 44.1kHz)
@@ -805,10 +791,16 @@ async function startListening() {
   } catch (e) { 
     console.error('Microphone error:', e);
     
-    // Message d'erreur spécifique iOS
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    if (isIOS) {
-      alert('🍎 iOS: Allez dans Réglages > Confidentialité > Microphone > Safari/Chrome, puis rechargez la page.');
+    // Nettoyage en cas d'erreur
+    if (audioCtx && audioCtx.state !== 'closed') {
+      try { audioCtx.close(); } catch(err) {}
+    }
+    audioCtx = null;
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = null;
+    
+    if (IS_IOS) {
+      alert('Microphone non accessible.\n\n1. Vérifiez : Réglages > Safari > Microphone\n2. Rechargez cette page\n3. Appuyez sur Autoriser quand demandé');
     } else {
       alert('Microphone inaccessible : ' + e.message); 
     }
@@ -836,9 +828,11 @@ async function startListening() {
 function stopListening() {
   isListening = false;
   if (animFrameId) cancelAnimationFrame(animFrameId);
-  if (source) source.disconnect();
+  if (source) { try { source.disconnect(); } catch(e) {} }
   if (stream) stream.getTracks().forEach(t => t.stop());
-  if (audioCtx) audioCtx.close();
+  if (audioCtx && audioCtx.state !== 'closed') { 
+    try { audioCtx.close(); } catch(e) {} 
+  }
   audioCtx = null;
   analyser = null;
   source = null;
@@ -875,8 +869,8 @@ function stopListening() {
 async function initPWA() {
   // Détecter la plateforme et navigateur
   const ua = navigator.userAgent;
-  const isIOS = /iPad|iPhone|iPod/.test(ua);
-  const isMac = /Macintosh|MacIntel|MacPPC|Mac68K/.test(ua);
+  const isIOS_local = IS_IOS;
+  const isMac = /Macintosh|MacIntel|MacPPC|Mac68K/.test(ua) && !IS_IOS;
   const isAndroid = /Android/.test(ua);
   const isWindows = /Windows|Win32|Win64|WinCE|Win95|Win98|Win16|WinNT/.test(ua);
   
@@ -887,7 +881,7 @@ async function initPWA() {
   
   const supportsBeforeInstallPrompt = 'onbeforeinstallprompt' in window;
   
-  console.log(`[PWA] Platform: ${isWindows ? 'Windows' : isAndroid ? 'Android' : isMac ? 'macOS' : isIOS ? 'iOS' : 'unknown'}`);
+  console.log(`[PWA] Platform: ${isWindows ? 'Windows' : isAndroid ? 'Android' : isMac ? 'macOS' : isIOS_local ? 'iOS' : 'unknown'}`);
   console.log(`[PWA] Browser: ${isChrome ? 'Chrome' : isEdge ? 'Edge' : isFirefox ? 'Firefox' : isSafari ? 'Safari' : 'unknown'}`);
   console.log(`[PWA] beforeinstallprompt support: ${supportsBeforeInstallPrompt}`);
 
@@ -900,9 +894,8 @@ async function initPWA() {
   });
   
   // Afficher les guides spécifiques pour les navigateurs sans beforeinstallprompt
-  if ((isIOS || isMac) && isSafari && !supportsBeforeInstallPrompt) {
-    // iOS et macOS Safari n'ont pas beforeinstallprompt
-    showAppleInstallGuide(isIOS ? 'iOS' : 'macOS');
+  if ((isIOS_local || isMac) && isSafari && !supportsBeforeInstallPrompt) {
+    showAppleInstallGuide(isIOS_local ? 'iOS' : 'macOS');
   } else if (!supportsBeforeInstallPrompt && !isChrome && !isEdge && !isFirefox) {
     // Autres navigateurs sans support
     console.warn('[PWA] Installation not supported in this browser');
@@ -1113,15 +1106,13 @@ function showAppleInstallGuide(platform) {
 }
 
 function showMicrophoneError(error) {
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  
   let errorMessage = 'Erreur microphone : ' + error.name;
   let solution = '';
   
   switch(error.name) {
     case 'NotAllowedError':
       errorMessage = 'Permission refusée';
-      solution = isIOS ? 
+      solution = IS_IOS ? 
         'Vérifiez: Réglages → GuitarTune → Microphone' :
         'Autorisez l\'accès au microphone';
       break;
@@ -1135,7 +1126,7 @@ function showMicrophoneError(error) {
       break;
     case 'PermissionDeniedError':
       errorMessage = 'Permission de microphone refusée';
-      solution = isIOS ? 
+      solution = IS_IOS ? 
         'Allez dans Réglages → GuitarTune → Autorisez le microphone' :
         'Autorisez l\'accès au microphone dans les paramètres';
       break;
