@@ -52,33 +52,33 @@ body {
 /* Force gauge visibility sur iOS */
 .gauge {
   position: relative !important;
-  height: 10px !important; /* Plus visible que h-2 Tailwind */
+  height: 6px !important;
   background: rgba(6, 6, 9, 0.8) !important;
   border-radius: 999px !important;
-  overflow: hidden !important;
+  overflow: visible !important;
   display: block !important;
   width: 100% !important;
-  min-height: 10px !important;
-  /* Fix iOS rendering */
+  min-height: 6px !important;
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
 }
 
 .gauge-needle {
   position: absolute !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
-  -webkit-transform: translateY(-50%) !important;
-  width: 2px !important;
-  height: 14px !important;
-  border-radius: 999px !important;
-  transition: left 0.2s ease !important;
+  top: -8px !important;
+  transform: translateX(-50%) !important;
+  -webkit-transform: translateX(-50%) !important;
+  width: 4px !important;
+  height: 22px !important;
+  border-radius: 2px !important;
+  transition: left 0.15s ease-out, background-color 0.2s ease !important;
   z-index: 10 !important;
 }
 
 .gauge-track {
   position: absolute !important;
   inset: 0 !important;
+  border-radius: 999px !important;
   background: linear-gradient(to right, #ef4444, #22c55e, #ef4444) !important;
   opacity: 0.5 !important;
 }
@@ -86,13 +86,13 @@ body {
 .gauge-center {
   position: absolute !important;
   left: 50% !important;
-  top: 50% !important;
-  transform: translate(-50%, -50%) !important;
-  -webkit-transform: translate(-50%, -50%) !important;
+  top: -5px !important;
+  bottom: -5px !important;
+  transform: translateX(-50%) !important;
+  -webkit-transform: translateX(-50%) !important;
   width: 2px !important;
-  height: 14px !important;
-  background: #22c55e !important;
-  border-radius: 999px !important;
+  background: rgba(34, 197, 94, 0.6) !important;
+  border-radius: 2px !important;
 }
 
 /* Note animations */
@@ -161,7 +161,7 @@ body {
 
 /* Gauge needle smooth animation */
 .gauge-needle {
-  transition: left 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: left 0.15s ease-out, background-color 0.2s ease;
 }
 
 /* Status dot states */
@@ -345,14 +345,14 @@ body {
 @media (max-width: 768px) {
   /* Taille optimale pour pouces */
   .mic-btn {
-    width: 72px !important;
-    height: 72px !important;
-    font-size: 2rem;
+    width: 56px !important;
+    height: 56px !important;
+    font-size: 1.5rem;
   }
   
   /* Espace optimisé autour du bouton */
   .mic-container {
-    padding: 1rem;
+    padding: 0.5rem;
   }
   
   /* Ajustement pour orientation paysage */
@@ -373,9 +373,9 @@ body {
 /* Zone d'accessibilité étendue pour petits écrans */
 @media (max-width: 480px) {
   .mic-btn {
-    width: 80px !important;
-    height: 80px !important;
-    font-size: 2.25rem;
+    width: 64px !important;
+    height: 64px !important;
+    font-size: 1.75rem;
   }
 }
 
@@ -534,6 +534,18 @@ header {
 }
 
 header .logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+header .logo .logo-icon {
+  width: clamp(22px, 3.5dvh, 32px);
+  height: clamp(22px, 3.5dvh, 32px);
+  flex-shrink: 0;
+}
+
+header .logo span {
   font-family: 'Syncopate', sans-serif;
   font-size: clamp(7px, 1.1dvh, 10px);
   letter-spacing: 0.4em;
@@ -663,7 +675,7 @@ header h1 {
 
 .gauge {
   position: relative;
-  height: 5px;
+  height: 6px;
   background: var(--bg3);
   border-radius: 3px;
   overflow: visible;
@@ -674,27 +686,28 @@ header h1 {
   inset: 0;
   border-radius: 3px;
   background: linear-gradient(90deg, var(--red) 0%, var(--amber) 35%, var(--green) 50%, var(--amber) 65%, var(--red) 100%);
-  opacity: 0.2;
+  opacity: 0.5;
 }
 
 .gauge-center {
   position: absolute;
   left: 50%;
-  top: -3px;
-  bottom: -3px;
-  width: 1px;
-  background: var(--border-bright);
+  top: -5px;
+  bottom: -5px;
+  width: 2px;
+  background: rgba(34, 197, 94, 0.6);
+  border-radius: 2px;
   transform: translateX(-50%);
 }
 
 .gauge-needle {
   position: absolute;
-  top: -7px;
-  width: 3px;
-  height: 19px;
+  top: -8px;
+  width: 4px;
+  height: 22px;
   border-radius: 2px;
   transform: translateX(-50%);
-  transition: left 0.1s ease, background-color 0.2s ease;
+  transition: left 0.15s ease-out, background-color 0.2s ease;
 }
 
 /* STATUS */
@@ -793,12 +806,18 @@ header h1 {
   background: var(--bg3);
   border: 1px solid var(--border);
   border-radius: clamp(6px, 1.2dvh, 10px);
-  padding: clamp(5px, 1dvh, 10px) 3px;
+  padding: clamp(3px, 0.8dvh, 8px) 2px;
   text-align: center;
   transition: all 0.2s;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   cursor: default;
+}
+
+.string-status .freq-text {
+  font-size: clamp(8px, 1.2vw, 11px);
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .string-status::before {
@@ -933,16 +952,11 @@ header h1 {
 }
 
 .mic-btn {
-  width: clamp(44px, 8dvh, 66px);
-  height: clamp(44px, 8dvh, 66px);
   border-radius: 50%;
-  border: 2px solid var(--border);
-  background: var(--bg3);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: clamp(16px, 3.5dvh, 24px);
   transition: all 0.25s ease;
   position: relative;
   pointer-events: auto;
@@ -987,7 +1001,6 @@ header h1 {
 
 .mic-btn:hover:not(.active) {
   border-color: var(--border-bright);
-  background: var(--bg2);
 }
 
 .mic-label {
@@ -1003,14 +1016,14 @@ header h1 {
   background: var(--bg3);
   border: 1px solid var(--border);
   border-radius: clamp(6px, 1.2dvh, 10px);
-  padding: 6px;
+  padding: 4px;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: clamp(50px, 8dvh, 70px);
-  max-height: clamp(50px, 8dvh, 70px);
-  height: clamp(50px, 8dvh, 70px);
+  min-height: clamp(36px, 6dvh, 56px);
+  max-height: clamp(36px, 6dvh, 56px);
+  height: clamp(36px, 6dvh, 56px);
 }
 
 #waveform {

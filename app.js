@@ -1,337 +1,14 @@
 /* ═════════════════════════════════════════════════════════════ */
-/* GuitarTune PWA - Application Launcher */
+/* GuitarTune PWA — Application Orchestrator                   */
+/* Dépend de : pitch-detection.js, platform-*.js               */
 /* ═════════════════════════════════════════════════════════════ */
 
 // ──────── CONFIG ────────
-const NOTE_NAMES_US = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const NOTE_NAMES_FR = ['Do', 'Do#', 'Ré', 'Ré#', 'Mi', 'Fa', 'Fa#', 'Sol', 'Sol#', 'La', 'La#', 'Si'];
-
-// Mode debug pour tester la détection
 const DEBUG_MODE = window.location.search.includes('debug=true');
-
-// Détection iOS robuste (iOS 15 à 26+, iPadOS, iPhone 15 Pro, etc.)
-function detectIOS() {
-  const ua = navigator.userAgent;
-  // Méthode 1: UA classique (iOS < 17)
-  if (/iPad|iPhone|iPod/.test(ua)) return true;
-  // Méthode 2: iPad avec desktop UA (iPadOS 13+)
-  if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true;
-  // Méthode 3: Safari mobile WebKit (iOS 17+, 26+)
-  if (/Macintosh/.test(ua) && 'ontouchend' in document) return true;
-  // Méthode 4: webkit spécifique iOS
-  if (window.webkit && window.webkit.messageHandlers) return true;
-  // Méthode 5: Vérifie les API spécifiques iOS
-  if (/AppleWebKit/.test(ua) && /Mobile/.test(ua)) return true;
-  return false;
-}
-const IS_IOS = detectIOS();
-console.log('[Platform] iOS:', IS_IOS, '| UA:', navigator.userAgent);
-
-const GUITAR_STRINGS = [
-  { string: 1, us: 'E', fr: 'Mi', freq: 82.41, octave: 2 },
-  { string: 2, us: 'A', fr: 'La', freq: 110.00, octave: 2 },
-  { string: 3, us: 'D', fr: 'Ré', freq: 146.83, octave: 3 },
-  { string: 4, us: 'G', fr: 'Sol', freq: 196.00, octave: 3 },
-  { string: 5, us: 'B', fr: 'Si', freq: 246.94, octave: 3 },
-  { string: 6, us: 'E', fr: 'Mi', freq: 329.63, octave: 4 },
-];
-
-// Accords standards (triplets de fréquences: corde6, corde5, corde4)
-const COMMON_CHORDS = [
-  { name: 'Em', notes: ['E2', 'A2', 'D3'], tolerance: 8 },
-  { name: 'Am', notes: ['E2', 'A2', 'C3'], tolerance: 8 },
-  { name: 'G', notes: ['E2', 'B2', 'G3'], tolerance: 8 },
-  { name: 'D', notes: ['D2', 'A2', 'D3'], tolerance: 8 },
-  { name: 'A', notes: ['E2', 'A2', 'E3'], tolerance: 8 },
-  { name: 'E', notes: ['E2', 'B2', 'E3'], tolerance: 8 },
-  { name: 'C', notes: ['E2', 'G2', 'C3'], tolerance: 8 },
-];
 
 let audioCtx = null, analyser = null, source = null, stream = null;
 let isListening = false, animFrameId = null;
-let essentia = null;
-let detectedNotes = []; // Historique des dernières notes détectées
-
-// Système de stabilisation pour guitares réelles
-let frequencyHistory = []; // Historique des fréquences détectées
-let stableFrequency = null; // Fréquence stable actuelle
-let stabilityCounter = 0; // Compteur de stabilité
-const STABILITY_THRESHOLD = 5; // Nombre de détections cohérentes requises
-const FREQUENCY_TOLERANCE = 8; // Tolérance en Hz pour considérer 2 fréquences comme identiques
-
-// ──────── ESSENTIA.JS INIT ────────
-async function initEssentia() {
-  try {
-    essentia = new Essentia(EssentiaWASM);
-    console.log('Essentia.js initialized');
-  } catch (e) {
-    console.warn('Essentia.js not available, using fallback:', e.message);
-  }
-}
-
-// ──────── PITCH DETECTION ────────
-
-// Stabilise les détections de fréquence pour guitares réelles
-function stabilizeFrequency(newFreq) {
-  if (newFreq < 20 || newFreq > 2000) return null; // Plage élargie : permet tests + guitare  
-  
-  // Priorité aux fréquences guitare mais accepte autres pour débogage
-  const inGuitarRange = (newFreq >= 60 && newFreq <= 500);
-  
-  // Si fréquence guitare, applique stabilisation complète
-  if (inGuitarRange) {
-    // Ajoute à l'historique
-    frequencyHistory.push(newFreq);
-    if (frequencyHistory.length > 10) frequencyHistory.shift();
-    
-    // Vérifie la cohérence avec la fréquence stable actuelle
-    if (stableFrequency !== null) {
-      const diff = Math.abs(newFreq - stableFrequency);
-      
-      if (diff <= FREQUENCY_TOLERANCE) {
-        // Fréquence cohérente, augmente la stabilité
-        stabilityCounter++;
-        stableFrequency = (stableFrequency * 0.8) + (newFreq * 0.2); // Lissage
-        return stableFrequency;
-      } else {
-        // Fréquence différente, reset
-        stabilityCounter = 0;
-        stableFrequency = null;
-      }
-    }
-    
-    // Pas de fréquence stable, recherche de consensus dans l'historique
-    if (frequencyHistory.length >= STABILITY_THRESHOLD) {
-      const recent = frequencyHistory.slice(-STABILITY_THRESHOLD);
-      let consensusFreq = null, maxCount = 0;
-      
-      for (let i = 0; i < recent.length; i++) {
-        let count = 0;
-        const baseFreq = recent[i];
-        
-        for (let j = 0; j < recent.length; j++) {
-          if (Math.abs(recent[j] - baseFreq) <= FREQUENCY_TOLERANCE) {
-            count++;
-          }
-        }
-        
-        if (count > maxCount) {
-          maxCount = count;
-          consensusFreq = baseFreq;
-        }
-      }
-      
-      // Si consensus trouvé (3+ détections cohérentes), devient stable
-      if (maxCount >= 3) {
-        stableFrequency = consensusFreq;
-        stabilityCounter = maxCount;
-        return stableFrequency;
-      }
-    }
-  } else {
-    // Frequencies hors guitare : affichage direct sans stabilisation (pour tests)
-    // Reset la stabilisation si on sort de la zone guitare  
-    if (stableFrequency !== null) {
-      stabilityCounter = 0;
-      stableFrequency = null; 
-    }
-    return newFreq; // Affichage immédiat pour tests/debug
-  }
-  
-  return null; // Pas encore stable
-}
-
-function freqToNote(freq) {
-  if (!freq || freq < 20) return null;
-  const noteNum = 12 * (Math.log2(freq / 440)) + 69;
-  const noteInt = Math.round(noteNum);
-  const cents = Math.round((noteNum - noteInt) * 100);
-  const noteIdx = ((noteInt % 12) + 12) % 12;
-  return { noteIdx, cents, us: NOTE_NAMES_US[noteIdx], fr: NOTE_NAMES_FR[noteIdx], freq: freq.toFixed(1) };
-}
-
-// Essentia pitch detection optimisé pour guitares acoustiques 
-function detectPitchEssentia(audioBuffer) {
-  if (!essentia || !audioBuffer) return -1;
-  try {
-    // Pré-emphasis pour renforcer les hautes fréquences
-    const preEmphasized = new Float32Array(audioBuffer.length);
-    for (let i = 1; i < audioBuffer.length; i++) {
-      preEmphasized[i] = audioBuffer[i] - 0.97 * audioBuffer[i - 1];
-    }
-    
-    // Applique une fenêtre de Hann
-    const windowed = essentia.arrayToVector(preEmphasized);
-    const windowed_hann = essentia.Windowing(windowed, 'hann');
-    
-    // Calcul du spectre avec zero-padding pour meilleure résolution
-    const spectrum = essentia.Spectrum(windowed_hann);
-    
-    // Détection robuste avec plusieurs méthodes
-    try {
-      // Méthode 1: Spectral Peaks avec filtrage harmonique
-      const { peaks_frequencies, peaks_magnitudes } = essentia.SpectralPeaks(
-        spectrum, 
-        20, // Plus de pics pour analyse harmonique
-        40, // Seuil minimum plus bas 
-        10000, // Fréquence max pour guitare
-        0.5  // Tolédance harmonique
-      );
-      
-      // Trouve la fréquence fondamentale parmi les pics
-      if (peaks_frequencies.length > 0) {
-        // Cherche le pic dominant dans la plage guitare (60-500Hz)
-        let bestFreq = -1, bestMag = 0;
-        
-        for (let i = 0; i < peaks_frequencies.length; i++) {
-          const freq = peaks_frequencies[i];
-          const mag = peaks_magnitudes[i];
-          
-          // Zone principale des cordes de guitare 
-          if (freq >= 60 && freq <= 500 && mag > bestMag && mag > 0.003) {
-            bestFreq = freq;
-            bestMag = mag;
-          }
-        }
-        
-        if (bestFreq > 0) return bestFreq;
-        
-        // Si pas trouvé, prend le premier pic significatif
-        if (peaks_magnitudes[0] > 0.002) {
-          return peaks_frequencies[0];
-        }
-      }
-      
-    } catch (peaksError) {
-      console.warn('SpectralPeaks error:', peaksError);
-    }
-    
-    // Méthode 2: YinFFT comme fallback
-    try {
-      const yinFreq = essentia.PitchYinFFT(windowed_hann);
-      if (yinFreq > 60 && yinFreq < 500) {
-        return yinFreq;
-      }
-    } catch (yinError) {
-      console.warn('YinFFT error:', yinError);
-    }
-    
-  } catch (e) {
-    console.warn('Essentia detection error:', e);
-  }
-  return -1;
-}
-
-// Fallback: autocorrélation améliorée pour guitares acoustiques
-function autoCorrelate(buf, sr) {
-  const SIZE = buf.length, MAX = Math.floor(SIZE / 2);
-  
-  // Détection de niveau audio plus sensible
-  let rms = 0;
-  for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
-  rms = Math.sqrt(rms / SIZE);
-  if (rms < 0.003) return -1; // Seuil plus bas pour guitares acoustiques
-
-  // Pré-emphasis pour améliorer détection fondamentale
-  const emphasized = new Float32Array(SIZE);
-  for (let i = 1; i < SIZE; i++) {
-    emphasized[i] = buf[i] - 0.95 * buf[i - 1];
-  }
-
-  // Recherche optimisée pour guitares (60Hz-500Hz principalement)  
-  const minPeriod = Math.floor(sr / 500); // 500Hz max
-  const maxPeriod = Math.floor(sr / 60);  // 60Hz min
-  const searchStart = Math.max(minPeriod, 8);
-  const searchEnd = Math.min(maxPeriod, MAX);
-  
-  let best = -1, bestC = 0;
-  let foundCandidate = false;
-  
-  // Autocorrélation avec seuil plus permissif
-  for (let o = searchStart; o < searchEnd; o++) {
-    let correlation = 0, normA = 0, normB = 0;
-    
-    for (let i = 0; i < MAX; i++) {
-      const a = emphasized[i];
-      const b = emphasized[i + o];
-      correlation += a * b;
-      normA += a * a;
-      normB += b * b;
-    }
-    
-    // Coefficient de corrélation normalisé
-    const normalizedCorr = normA * normB > 0 ? correlation / Math.sqrt(normA * normB) : 0;
-    
-    // Seuil plus permissif pour guitares (0.6 au lieu de 0.9)
-    if (normalizedCorr > 0.6 && normalizedCorr > bestC) {
-      bestC = normalizedCorr;
-      best = o;
-      foundCandidate = true;
-    }
-  }
-  
-  // Affinage par interpolation parabolique si confident
-  if (foundCandidate && bestC > 0.7 && best > searchStart && best < searchEnd - 1) {
-    const y1 = bestC;
-    let y0 = 0, y2 = 0;
-    
-    // Recalcule la corrélation pour les points adjacents
-    for (let i = 0; i < MAX; i++) {
-      const a = emphasized[i];
-      y0 += a * emphasized[i + best - 1];
-      y2 += a * emphasized[i + best + 1];
-    }
-    
-    const denom = 2 * (2 * y1 - y0 - y2);
-    if (Math.abs(denom) > 0.0001) {
-      const offset = (y2 - y0) / denom;
-      best += offset;
-    }
-  }
-  
-  return foundCandidate ? sr / best : -1;
-}
-
-// ──────── CHORD DETECTION ────────
-function detectChord(notes) {
-  if (!notes || notes.length < 3) return null;
-  
-  // Extrait les fréquences des 3 cordes principales
-  const freqs = notes.slice(0, 3).map(n => n ? parseFloat(n.freq) : null).filter(f => f);
-  if (freqs.length < 3) return null;
-
-  let bestChord = null, bestMatch = 0;
-
-  COMMON_CHORDS.forEach(chord => {
-    let match = 0;
-    chord.notes.forEach((noteStr, i) => {
-      const expectedNote = freqToNote(getNoteFrequency(noteStr));
-      if (expectedNote && freqs[i]) {
-        const detectedNote = freqToNote(freqs[i]);
-        const diff = Math.abs(detectedNote.cents);
-        if (diff < chord.tolerance * 2) {
-          match += (100 - diff) / 100;
-        }
-      }
-    });
-
-    if (match > bestMatch) {
-      bestMatch = match;
-      bestChord = chord;
-    }
-  });
-
-  return bestMatch > 1.5 ? bestChord : null;
-}
-
-// Obtient la fréquence d'une note (ex: 'E2' -> 82.41 Hz)
-function getNoteFrequency(noteStr) {
-  const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-  const note = noteStr.slice(0, -1);
-  const octave = parseInt(noteStr.slice(-1));
-  const semitones = (notes.indexOf(note) || 0) - 9; // A0 = 27.5 Hz
-  return 27.5 * Math.pow(2, octave + (semitones / 12));
-}
+let detectedNotes = [];
 
 // ──────── DOM REFS ────────
 let noteFrEl, noteUsEl, freqValEl, needleEl, statusDotEl, statusTextEl, centsEl, micBtn, micLabel, waveCanvas, waveCtx;
@@ -355,48 +32,22 @@ function initDOM() {
   // Créer élément d'affichage d'accord
   chordDisplay = createChordDisplay();
   
-  // Amélioration accessibilité mobile : gestion touch
-  improveMobileAccessibility();
+  // Amélioration accessibilité mobile
+  improveMobileAccessibility(micBtn);
   
-  // iOS spécifique: préparation contexte audio
-  setupIOSAudio();
+  // Configuration audio plateforme
+  setupPlatformAudio();
   
   // Activer le mode debug si demandé
   if (DEBUG_MODE) {
     const debugPanel = document.getElementById('debug-panel');
     if (debugPanel) {
       debugPanel.classList.remove('hidden');
-      console.log('🔧 Debug Mode Activated');
+      console.log('Debug Mode Activated');
     }
   }
 }
 
-// Configuration spéciale iOS
-function setupIOSAudio() {
-  if (IS_IOS) {
-    console.log('🍎 iOS detected - mode compatible activé');
-  }
-}
-
-// Améliorations accessibilité mobile
-function improveMobileAccessibility() {
-  if (!micBtn) return;
-  
-  // Feedback tactile (si disponible)
-  micBtn.addEventListener('click', () => {
-    if ('vibrate' in navigator) {
-      navigator.vibrate(50);
-    }
-  });
-  
-  // Focus amélioré pour navigation clavier
-  micBtn.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      micBtn.click();
-    }
-  });
-}
 
 function createChordDisplay() {
   const div = document.createElement('div');
@@ -411,15 +62,15 @@ function buildStrings() {
   const stringsGrid = document.getElementById('strings-grid');
   GUITAR_STRINGS.forEach(s => {
     const div = document.createElement('div');
-    div.className = 'string-btn string-status flex flex-col items-center justify-center h-16 cursor-pointer';
+    div.className = 'string-btn string-status flex flex-col items-center justify-center cursor-pointer';
     div.setAttribute('data-string', s.string);
     div.setAttribute('data-note-us', s.us);
     div.setAttribute('data-freq', s.freq);
     div.innerHTML = `
-      <div class="text-xs text-text-dim">${s.string}</div>
-      <div class="text-sm font-bold">${s.us}</div>
-      <div class="text-xs text-text-dim">${s.fr}</div>
-      <div class="text-xs opacity-70">${s.freq}Hz</div>
+      <div class="text-xs text-text-dim leading-tight">${s.string}</div>
+      <div class="text-sm font-bold leading-tight">${s.us}</div>
+      <div class="text-xs text-text-dim leading-tight">${s.fr}</div>
+      <div class="freq-text opacity-70">${s.freq}Hz</div>
       <div class="s-status-icon text-accent-green opacity-0 transition-opacity duration-200">✓</div>
     `;
     stringsGrid.appendChild(div);
@@ -486,7 +137,7 @@ function updateUI(note, isStabilized = true) {
 
   // Aiguille colorée selon justesse
   needleEl.style.background = color; 
-  needleEl.style.boxShadow = `0 0 8px ${color}`;
+  needleEl.style.boxShadow = `0 0 10px ${color}, 0 0 4px ${color}`;
   
   // Notes affichées avec indication de stabilité
   noteFrEl.className = 'note-name ' + cls; 
@@ -708,16 +359,10 @@ async function startListening() {
     // Initialise Essentia
     await initEssentia();
 
-    console.log('[Audio] iOS detected:', IS_IOS);
+    console.log('[Audio] Platform:', PLATFORM_NAME);
 
-    // Contraintes audio simples — iOS Safari ne supporte PAS sampleRate/channelCount/sampleSize
-    const audioConstraints = {
-      audio: {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false
-      }
-    };
+    // Contraintes audio adaptées à la plateforme
+    const audioConstraints = getPlatformAudioConstraints();
 
     // 1. D'abord demander le micro (déclenche la permission iOS)
     console.log('[Audio] Requesting microphone...');
@@ -799,17 +444,13 @@ async function startListening() {
     if (stream) stream.getTracks().forEach(t => t.stop());
     stream = null;
     
-    if (IS_IOS) {
-      alert('Microphone non accessible.\n\n1. Vérifiez : Réglages > Safari > Microphone\n2. Rechargez cette page\n3. Appuyez sur Autoriser quand demandé');
-    } else {
-      alert('Microphone inaccessible : ' + e.message); 
-    }
+    alert(getPlatformMicErrorAlert(e));
     
     // Reset états
     isListening = false;
     micBtn.classList.remove('active');
     
-    // Restaure icône microphone
+    // Restaure icône microphone (orange)
     const micIcon = micBtn.querySelector('.mic-icon');
     if (micIcon) {
       micIcon.innerHTML = `
@@ -818,7 +459,7 @@ async function startListening() {
         <line x1="12" y1="19" x2="12" y2="23"></line>
         <line x1="8" y1="23" x2="16" y2="23"></line>
       `;
-      micIcon.style.color = '#ef4444'; // Rouge pour erreur
+      micIcon.style.color = '#f5a623';
     }
     
     micLabel.textContent = 'Erreur';
@@ -840,13 +481,11 @@ function stopListening() {
   detectedNotes = [];
   
   // Reset du système de stabilisation
-  frequencyHistory = [];
-  stableFrequency = null;
-  stabilityCounter = 0;
+  resetStabilization();
   
   micBtn.classList.remove('active');
   
-  // Restaure l'icône microphone inactive
+  // Restaure l'icône microphone inactive (orange)
   const micIcon = micBtn.querySelector('.mic-icon');
   if (micIcon) {
     micIcon.innerHTML = `
@@ -855,7 +494,7 @@ function stopListening() {
       <line x1="12" y1="19" x2="12" y2="23"></line>
       <line x1="8" y1="23" x2="16" y2="23"></line>
     `;
-    micIcon.style.color = ''; // Couleur par défaut
+    micIcon.style.color = '#f5a623';
   }
   
   micLabel.textContent = 'Écouter';
@@ -869,10 +508,7 @@ function stopListening() {
 async function initPWA() {
   // Détecter la plateforme et navigateur
   const ua = navigator.userAgent;
-  const isIOS_local = IS_IOS;
   const isMac = /Macintosh|MacIntel|MacPPC|Mac68K/.test(ua) && !IS_IOS;
-  const isAndroid = /Android/.test(ua);
-  const isWindows = /Windows|Win32|Win64|WinCE|Win95|Win98|Win16|WinNT/.test(ua);
   
   const isChrome = /Chrome/.test(ua) && !/Chromium|Edge|OPR/.test(ua);
   const isEdge = /Edg/.test(ua);
@@ -881,7 +517,7 @@ async function initPWA() {
   
   const supportsBeforeInstallPrompt = 'onbeforeinstallprompt' in window;
   
-  console.log(`[PWA] Platform: ${isWindows ? 'Windows' : isAndroid ? 'Android' : isMac ? 'macOS' : isIOS_local ? 'iOS' : 'unknown'}`);
+  console.log(`[PWA] Platform: ${PLATFORM_NAME}`);
   console.log(`[PWA] Browser: ${isChrome ? 'Chrome' : isEdge ? 'Edge' : isFirefox ? 'Firefox' : isSafari ? 'Safari' : 'unknown'}`);
   console.log(`[PWA] beforeinstallprompt support: ${supportsBeforeInstallPrompt}`);
 
@@ -893,9 +529,10 @@ async function initPWA() {
     showInstallPrompt();
   });
   
-  // Afficher les guides spécifiques pour les navigateurs sans beforeinstallprompt
-  if ((isIOS_local || isMac) && isSafari && !supportsBeforeInstallPrompt) {
-    showAppleInstallGuide(isIOS_local ? 'iOS' : 'macOS');
+  // Afficher les guides spécifiques par plateforme
+  const installGuide = getPlatformInstallGuide();
+  if (installGuide && !supportsBeforeInstallPrompt) {
+    showAppleInstallGuide(installGuide.platform, installGuide.html);
   } else if (!supportsBeforeInstallPrompt && !isChrome && !isEdge && !isFirefox) {
     // Autres navigateurs sans support
     console.warn('[PWA] Installation not supported in this browser');
@@ -1042,7 +679,7 @@ function showInstallPrompt() {
   });
 }
 
-function showAppleInstallGuide(platform) {
+function showAppleInstallGuide(platform, instructionsHtml) {
   const guideDiv = document.createElement('div');
   guideDiv.id = 'apple-install-guide';
   guideDiv.style.cssText = `
@@ -1060,25 +697,10 @@ function showAppleInstallGuide(platform) {
     color: #fff;
   `;
 
-  let instructions = '';
-  if (platform === 'iOS') {
-    instructions = `
-      1. Tapez le bouton Partage (↗️)<br/>
-      2. Sélectionnez "Sur l'écran d'accueil"<br/>
-      3. Confirmez
-    `;
-  } else if (platform === 'macOS') {
-    instructions = `
-      1. Cliquez le menu "Partage" (↗️)<br/>
-      2. Sélectionnez "Ajouter à la base de lecture"<br/>
-      3. Confirmez
-    `;
-  }
-
   guideDiv.innerHTML = `
-    <div style="font-weight: 700; margin-bottom: 12px;">🍎 Installer sur ${platform}</div>
+    <div style="font-weight: 700; margin-bottom: 12px;">Installer sur ${platform}</div>
     <div style="font-size: 12px; margin-bottom: 12px; opacity: 0.95;">
-      ${instructions}
+      ${instructionsHtml}
     </div>
     <button id="apple-close" style="
       width: 100%;
@@ -1106,31 +728,7 @@ function showAppleInstallGuide(platform) {
 }
 
 function showMicrophoneError(error) {
-  let errorMessage = 'Erreur microphone : ' + error.name;
-  let solution = '';
-  
-  switch(error.name) {
-    case 'NotAllowedError':
-      errorMessage = 'Permission refusée';
-      solution = IS_IOS ? 
-        'Vérifiez: Réglages → GuitarTune → Microphone' :
-        'Autorisez l\'accès au microphone';
-      break;
-    case 'NotFoundError':
-      errorMessage = 'Microphone non détecté';
-      solution = 'Vérifiez que votre appareil a un microphone';
-      break;
-    case 'NotReadableError':
-      errorMessage = 'Microphone en utilisation';
-      solution = 'Fermez les autres apps utilisant le microphone';
-      break;
-    case 'PermissionDeniedError':
-      errorMessage = 'Permission de microphone refusée';
-      solution = IS_IOS ? 
-        'Allez dans Réglages → GuitarTune → Autorisez le microphone' :
-        'Autorisez l\'accès au microphone dans les paramètres';
-      break;
-  }
+  const { message: errorMessage, solution } = getPlatformMicError(error);
 
   const errorDiv = document.createElement('div');
   errorDiv.style.cssText = `
@@ -1269,7 +867,7 @@ function showNotification(title, message) {
   if ('Notification' in window && Notification.permission === 'granted') {
     new Notification(title, {
       body: message,
-      icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect fill="%23060609" width="192" height="192"/><circle cx="96" cy="96" r="70" fill="%23f5a623"/></svg>'
+      icon: 'logo.svg'
     });
   }
 }

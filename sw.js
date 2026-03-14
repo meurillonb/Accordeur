@@ -1,11 +1,17 @@
 // ───── SERVICE WORKER PWA CONFIGURATION ─────
-const CACHE_VERSION = 'guitartune-v2';
-const RUNTIME_CACHE = 'guitartune-runtime-v2';
-const STATIC_CACHE = 'guitartune-static-v2';
+const CACHE_VERSION = 'guitartune-v3';
+const RUNTIME_CACHE = 'guitartune-runtime-v3';
+const STATIC_CACHE = 'guitartune-static-v3';
 
 const STATIC_ASSETS = [
     '/',
     '/index.html',
+    '/logo.svg',
+    '/pitch-detection.js',
+    '/platform-ios.js',
+    '/platform-android.js',
+    '/platform-desktop.js',
+    '/platform-common.js',
     '/app.js',
     '/style.css',
     '/manifest.json',
