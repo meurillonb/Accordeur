@@ -6,6 +6,9 @@
 const NOTE_NAMES_US = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const NOTE_NAMES_FR = ['Do', 'Do#', 'Ré', 'Ré#', 'Mi', 'Fa', 'Fa#', 'Sol', 'Sol#', 'La', 'La#', 'Si'];
 
+// Mode debug pour tester la détection
+const DEBUG_MODE = window.location.search.includes('debug=true');
+
 const GUITAR_STRINGS = [
   { string: 1, us: 'E', fr: 'Mi', freq: 82.41 },
   { string: 2, us: 'A', fr: 'La', freq: 110.00 },
@@ -157,20 +160,19 @@ function initDOM() {
 
   // Créer élément d'affichage d'accord
   chordDisplay = createChordDisplay();
+  
+  // Activer le mode debug si demandé
+  if (DEBUG_MODE) {
+    document.getElementById('debug-panel').classList.remove('hidden');
+    console.log('🔧 Debug Mode Activated');
+  }
 }
 
 function createChordDisplay() {
   const div = document.createElement('div');
   div.id = 'chord-display';
-  div.style.cssText = `
-    text-align: center;
-    font-size: clamp(10px, 1.5dvh, 14px);
-    color: var(--amber);
-    text-shadow: 0 0 10px var(--amber-glow);
-    margin-top: 8px;
-    letter-spacing: 0.1em;
-    font-weight: 700;
-  `;
+  div.className = 'text-center text-sm text-accent-amber font-bold tracking-wide mt-2';
+  div.style.textShadow = '0 0 10px rgba(245, 166, 35, 0.5)';
   document.querySelector('.main-display').appendChild(div);
   return div;
 }
@@ -179,11 +181,17 @@ function buildStrings() {
   const stringsGrid = document.getElementById('strings-grid');
   GUITAR_STRINGS.forEach(s => {
     const div = document.createElement('div');
-    div.className = 'string-status';
+    div.className = 'string-btn string-status flex flex-col items-center justify-center h-16 cursor-pointer';
     div.setAttribute('data-string', s.string);
     div.setAttribute('data-note-us', s.us);
     div.setAttribute('data-freq', s.freq);
-    div.innerHTML = `<div class="s-num">${s.string}</div><div class="s-note-us">${s.us}</div><div class="s-note-fr">${s.fr}</div><div class="s-freq">${s.freq}Hz</div><div class="s-status-icon">✓</div>`;
+    div.innerHTML = `
+      <div class="text-xs text-text-dim">${s.string}</div>
+      <div class="text-sm font-bold">${s.us}</div>
+      <div class="text-xs text-text-dim">${s.fr}</div>
+      <div class="text-xs opacity-70">${s.freq}Hz</div>
+      <div class="s-status-icon text-accent-green opacity-0 transition-opacity duration-200">✓</div>
+    `;
     stringsGrid.appendChild(div);
   });
 }
@@ -192,8 +200,12 @@ function buildChromatic() {
   const chromGrid = document.getElementById('chromatic-grid');
   NOTE_NAMES_US.forEach((n, i) => {
     const div = document.createElement('div');
-    div.className = 'chroma-note'; div.id = `chroma-${i}`;
-    div.innerHTML = `<div class="cn-us">${n}</div><div class="cn-fr">${NOTE_NAMES_FR[i]}</div>`;
+    div.className = 'chromatic-btn chroma-note flex flex-col items-center justify-center h-12 cursor-pointer';
+    div.id = `chroma-${i}`;
+    div.innerHTML = `
+      <div class="text-sm font-mono">${n}</div>
+      <div class="text-xs opacity-70">${NOTE_NAMES_FR[i]}</div>
+    `;
     chromGrid.appendChild(div);
   });
 }
@@ -339,6 +351,26 @@ function processAudio() {
 
   if (freq > 40 && freq < 2000) {
     updateUI(freqToNote(freq));
+    
+    // Mode debug : affichage des détails de détection
+    if (DEBUG_MODE) {
+      const note = freqToNote(freq);
+      console.log(`🎵 Frequency detected: ${freq.toFixed(2)} Hz`);
+      console.log(`🎼 Note: ${note.us}/${note.fr}, Cents: ${note.cents > 0 ? '+' : ''}${note.cents}`);
+      
+      // Calculer RMS pour le niveau audio
+      let rms = 0;
+      for (let i = 0; i < buf.length; i++) {
+        rms += buf[i] * buf[i];
+      }
+      rms = Math.sqrt(rms / buf.length);
+      
+      // Afficher les infos de debug dans l'interface
+      document.getElementById('debug-freq').textContent = `${freq.toFixed(2)} Hz`;
+      document.getElementById('debug-method').textContent = essentia ? 'Essentia.js' : 'AutoCorrelation';
+      document.getElementById('debug-rms').textContent = rms.toFixed(4);
+      document.getElementById('debug-buffer').textContent = `${buf.length} samples`;
+    }
   } else {
     statusTextEl.textContent = 'En écoute...';
     statusDotEl.className = 'status-dot listening';

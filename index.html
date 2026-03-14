@@ -23,80 +23,143 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Playfair+Display:ital,wght@1,400;1,700&display=swap"
     rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            'bg-primary': '#060609',
+            'bg-secondary': '#0e0e16',
+            'bg-tertiary': '#14141f',
+            'border-subtle': 'rgba(255, 255, 255, 0.07)',
+            'border-bright': 'rgba(255, 255, 255, 0.15)',
+            'accent-amber': '#f5a623',
+            'accent-amber-dim': '#a36a10',
+            'accent-green': '#22c55e',
+            'accent-red': '#ef4444',
+            'text-primary': '#e8e8f0',
+            'text-dim': '#6b6b80',
+            'text-muted': '#3a3a50'
+          },
+          fontFamily: {
+            'mono': ['DM Mono', 'monospace'],
+            'display': ['Syncopate', 'sans-serif'],
+            'serif': ['Playfair Display', 'serif']
+          }
+        }
+      }
+    }
+  </script>
   <link rel="stylesheet" href="style.css" />
 </head>
 
-<body>
-  <div id="root">
+<body class="h-screen bg-bg-primary text-text-primary font-mono overflow-hidden">
+  <div id="root" class="h-full flex flex-col">
 
-    <header>
-      <div class="logo">Guitar Tune</div>
+    <header class="bg-bg-secondary/50 backdrop-blur-sm border-b border-border-subtle px-4 py-3">
+      <div class="logo font-display text-xl font-bold text-accent-amber tracking-wide">Guitar Tune</div>
     </header>
 
-    <div class="main-display">
-      <div class="note-container">
-        <div class="note-label">
-          <div class="lang">Français</div>
-          <div class="note-name idle" id="note-fr">—</div>
-        </div>
-        <div class="divider"></div>
-        <div class="freq-display">
-          <div class="freq-value" id="freq-val">— —</div>
-          <div class="freq-unit">Hz</div>
-        </div>
-        <div class="divider"></div>
-        <div class="note-label">
-          <div class="lang">English</div>
-          <div class="note-name idle" id="note-us">—</div>
-        </div>
-      </div>
-
-      ```
-      <div class="gauge-wrap">
-        <div class="gauge-label-row">
-          <span>♭ BÉMOL</span>
-          <span>JUSTE</span>
-          <span>♯ DIÈSE</span>
-        </div>
-        <div class="gauge">
-          <div class="gauge-track"></div>
-          <div class="gauge-center"></div>
-          <div class="gauge-needle" id="needle" style="left:50%;background:var(--text-muted);"></div>
+    <div class="main-display flex-1 p-4 bg-gradient-to-b from-bg-secondary/30 to-transparent">
+      <div class="note-container bg-bg-secondary/70 backdrop-blur-sm rounded-2xl p-6 mb-6 border border-border-subtle">
+        <div class="flex items-center justify-between">
+          <div class="note-label text-center">
+            <div class="lang text-sm text-text-dim mb-2">Français</div>
+            <div class="note-name idle text-3xl font-bold text-accent-amber" id="note-fr">—</div>
+          </div>
+          <div class="divider w-px h-16 bg-border-subtle"></div>
+          <div class="freq-display text-center">
+            <div class="freq-value text-2xl font-mono font-medium" id="freq-val">— —</div>
+            <div class="freq-unit text-sm text-text-dim mt-1">Hz</div>
+          </div>
+          <div class="divider w-px h-16 bg-border-subtle"></div>
+          <div class="note-label text-center">
+            <div class="lang text-sm text-text-dim mb-2">English</div>
+            <div class="note-name idle text-3xl font-bold text-accent-amber" id="note-us">—</div>
+          </div>
         </div>
       </div>
 
-      <div class="status-row">
-        <div class="status-dot off" id="status-dot"></div>
-        <span class="status-text" id="status-text">Inactif</span>
-        <span class="cents-display" id="cents-display"></span>
+      <div class="gauge-wrap bg-bg-tertiary/50 rounded-xl p-4 mb-4">
+        <div class="gauge-label-row flex justify-between text-xs text-text-dim mb-3">
+          <span class="flex items-center gap-1">♭ <span class="hidden sm:inline">BÉMOL</span></span>
+          <span class="font-medium text-accent-green">JUSTE</span>
+          <span class="flex items-center gap-1">♯ <span class="hidden sm:inline">DIÈSE</span></span>
+        </div>
+        <div class="gauge relative h-2 bg-bg-primary/60 rounded-full overflow-hidden">
+          <div class="gauge-track absolute inset-0 bg-gradient-to-r from-accent-red via-accent-green to-accent-red opacity-40"></div>
+          <div class="gauge-center absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-1 h-4 bg-accent-green rounded-full"></div>
+          <div class="gauge-needle absolute top-1/2 transform -translate-y-1/2 w-1 h-4 bg-text-muted rounded-full transition-all duration-200" id="needle" style="left:50%;"></div>
+        </div>
       </div>
-      ```
+
+      <div class="status-row flex items-center justify-between bg-bg-secondary/30 rounded-lg px-4 py-3">
+        <div class="flex items-center gap-3">
+          <div class="status-dot w-3 h-3 rounded-full bg-text-muted" id="status-dot"></div>
+          <span class="status-text text-sm font-medium" id="status-text">Inactif</span>
+        </div>
+        <span class="cents-display text-sm font-mono" id="cents-display"></span>
+      </div>
+
+      <!-- Zone de debug (masquée par défaut) -->
+      <div id="debug-panel" class="bg-bg-tertiary/50 rounded-lg p-3 mt-4 text-xs font-mono hidden">
+        <div class="text-accent-amber font-bold mb-2">🔧 Debug Info</div>
+        <div class="grid grid-cols-2 gap-2 text-text-dim">
+          <div>Frequency: <span id="debug-freq" class="text-text-primary">-</span></div>
+          <div>Method: <span id="debug-method" class="text-text-primary">-</span></div>
+          <div>RMS Level: <span id="debug-rms" class="text-text-primary">-</span></div>
+          <div>Buffer Size: <span id="debug-buffer" class="text-text-primary">-</span></div>
+        </div>
+      </div>
+
+      <!-- Zone de debug (masquée par défaut) -->
+      <div id="debug-panel" class="bg-bg-tertiary/50 rounded-lg p-3 mt-4 text-xs font-mono hidden">
+        <div class="text-accent-amber font-bold mb-2">🔧 Debug Info</div>
+        <div class="grid grid-cols-2 gap-2 text-text-dim">
+          <div>Frequency: <span id="debug-freq" class="text-text-primary">-</span></div>
+          <div>Method: <span id="debug-method" class="text-text-primary">-</span></div>
+          <div>RMS Level: <span id="debug-rms" class="text-text-primary">-</span></div>
+          <div>Buffer Size: <span id="debug-buffer" class="text-text-primary">-</span></div>
+        </div>
+      </div>
 
     </div>
 
-    <div class="strings-section">
-      <div class="strings-label">Cordes Standard — E A D G B e</div>
-      <div class="strings-grid" id="strings-grid"></div>
+    <div class="strings-section px-4 mb-6">
+      <div class="strings-label text-center text-sm text-text-dim mb-3 font-medium tracking-wide">Cordes Standard — E A D G B e</div>
+      <div class="strings-grid grid grid-cols-6 gap-2" id="strings-grid"></div>
     </div>
 
-    <div class="mic-wave-row">
-      <div class="mic-section">
-        <button class="mic-btn" id="mic-btn" title="Activer le microphone">🎙</button>
-        <div class="mic-label" id="mic-label">Écouter</div>
+    <div class="mic-wave-row px-4 mb-6">
+      <div class="flex items-center gap-4">
+        <div class="mic-section flex-shrink-0">
+          <button class="mic-btn w-14 h-14 bg-accent-amber/20 hover:bg-accent-amber/30 active:bg-accent-amber/40 backdrop-blur-sm border border-accent-amber/30 rounded-full flex items-center justify-center text-2xl transition-all duration-200 transform hover:scale-105 active:scale-95" id="mic-btn" title="Activer le microphone">🎙</button>
+          <div class="mic-label text-xs text-center mt-2 text-text-dim" id="mic-label">Écouter</div>
+        </div>
+        <div class="waveform-wrap flex-1 h-12 bg-bg-secondary/30 rounded-lg overflow-hidden">
+          <canvas id="waveform" class="w-full h-full"></canvas>
+        </div>
       </div>
-      <div class="waveform-wrap">
-        <canvas id="waveform"></canvas>
+    </div>
+
+    <div class="chromatic-section px-4 mb-4">
+      <div class="chromatic-label text-center text-sm text-text-dim mb-3 font-medium tracking-wide">Gamme Chromatique</div>
+      <div class="chromatic-grid grid grid-cols-6 sm:grid-cols-12 gap-2" id="chromatic-grid"></div>
+    </div>
+
+    <footer class="bg-bg-secondary/30 backdrop-blur-sm border-t border-border-subtle px-4 py-3 flex items-center justify-between text-xs text-text-dim mt-auto">
+      <div class="flex items-center gap-2">
+        <span class="online-indicator w-2 h-2 rounded-full bg-accent-green" id="online-indicator"></span>
+        <span class="hidden sm:inline" id="footer-text">GuitarTune PWA · A440 · Equal Temperament</span>
+        <span class="sm:hidden" id="footer-text">GuitarTune PWA</span>
       </div>
-    </div>
-
-    <div class="chromatic-section">
-      <div class="chromatic-label">Gamme Chromatique</div>
-      <div class="chromatic-grid" id="chromatic-grid"></div>
-    </div>
-
-    <footer>
-      <span class="online-indicator" id="online-indicator"></span>
-      <span id="footer-text">GuitarTune PWA · A440 · Equal Temperament</span>
+      <div class="text-xs text-text-muted">
+        <a href="?debug=true" class="hover:text-accent-amber transition-colors">Debug Mode</a>
+        <span class="mx-1">•</span>
+        <a href="test-audio.html" target="_blank" class="hover:text-accent-amber transition-colors">Test Audio</a>
+      </div>
     </footer>
 
   </div>

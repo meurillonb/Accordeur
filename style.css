@@ -1,32 +1,6 @@
 /* ═════════════════════════════════════════════════════════════ */
-/* GuitarTune PWA - Stylesheet */
+/* GuitarTune PWA - Tailwind Complementary Styles */
 /* ═════════════════════════════════════════════════════════════ */
-
-:root {
-  --bg: #060609;
-  --bg2: #0e0e16;
-  --bg3: #14141f;
-  --border: rgba(255, 255, 255, 0.07);
-  --border-bright: rgba(255, 255, 255, 0.15);
-  --amber: #f5a623;
-  --amber-dim: #a36a10;
-  --amber-glow: rgba(245, 166, 35, 0.25);
-  --green: #22c55e;
-  --green-glow: rgba(34, 197, 94, 0.3);
-  --red: #ef4444;
-  --red-glow: rgba(239, 68, 68, 0.3);
-  --text: #e8e8f0;
-  --text-dim: #6b6b80;
-  --text-muted: #3a3a50;
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
 
 /* Lock viewport — zero scroll */
 html {
@@ -35,19 +9,136 @@ html {
   overflow: hidden;
 }
 
+/* Base body adjustments for PWA */
 body {
-  height: 100%;
-  height: 100dvh;
-  overflow: hidden;
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'DM Mono', monospace;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   /* Notched phone safe areas */
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  /* iOS scroll bounce disable */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Custom glass morphism effects */
+.glass-effect {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Note animations */
+.note-name {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.note-name.active {
+  @apply text-accent-green;
+  animation: pulse-green 1s ease-in-out infinite;
+}
+
+.note-name.sharp {
+  @apply text-accent-red;
+}
+
+.note-name.flat {
+  @apply text-accent-red;
+}
+
+/* Gauge needle smooth animation */
+.gauge-needle {
+  transition: left 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Status dot states */
+.status-dot.off { @apply bg-text-muted; }
+.status-dot.listening { @apply bg-accent-amber animate-pulse; }
+.status-dot.detecting { @apply bg-accent-green; }
+
+/* String buttons */
+.string-btn {
+  @apply bg-bg-tertiary/70 hover:bg-accent-amber/20 border border-border-subtle hover:border-accent-amber/50;
+  @apply text-text-primary hover:text-accent-amber rounded-lg px-3 py-2 text-sm font-mono;
+  @apply transition-all duration-200 transform hover:scale-105 active:scale-95;
+  @apply backdrop-blur-sm;
+}
+
+.string-btn.active {
+  @apply bg-accent-amber/30 border-accent-amber text-accent-amber;
+  box-shadow: 0 0 20px rgba(245, 166, 35, 0.3);
+}
+
+/* Chromatic grid buttons */
+.chromatic-btn {
+  @apply bg-bg-tertiary/50 hover:bg-accent-amber/20 border border-border-subtle hover:border-accent-amber/30;
+  @apply text-text-dim hover:text-text-primary rounded-md px-2 py-2 text-xs font-mono;
+  @apply transition-all duration-200 backdrop-blur-sm;
+}
+
+.chromatic-btn.active {
+  @apply bg-accent-amber/40 border-accent-amber text-accent-amber font-bold;
+  animation: pulse-amber 0.5s ease-out;
+}
+
+/* Custom animations */
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.05); }
+}
+
+@keyframes pulse-amber {
+  0% { box-shadow: 0 0 0 0 rgba(245, 166, 35, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(245, 166, 35, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(245, 166, 35, 0); }
+}
+
+/* Waveform canvas styling */
+#waveform {
+  min-height: 48px;
+}
+
+/* iOS specific fixes */
+@supports (-webkit-touch-callout: none) {
+  /* iOS Safari viewport fix */
+  body {
+    height: 100vh;
+    height: -webkit-fill-available;
+  }
+}
+
+/* Android Chrome fixes */
+@media screen and (max-width: 640px) {
+  /* Prevent zoom on input focus */
+  input, select, textarea, button {
+    font-size: 16px;
+  }
+}
+
+/* Performance optimizations */
+.gpu-accelerated {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Dark mode forced */
+* {
+  color-scheme: dark;
+}
+
+/* Remove focus outline for touch devices */
+@media (pointer: coarse) {
+  button:focus,
+  input:focus,
+  textarea:focus,
+  select:focus {
+    outline: none;
+  }
+}
+
+/* Print styles (hide app for printing) */
+@media print {
+  body { display: none; }
+}
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
 }
